@@ -12,20 +12,27 @@ import java.util.Scanner;
 
 public class Main {
 
+    static final int num_min_port = 2005;
+
     public static void main(String args[]) throws Exception {
-        NioEngine engine = new NioEngine();
-
-//        int m_port_listening = 2005;
-
+        /**
+         * On demande le port de connexion à l'utilisateur du programme
+         */
         Scanner sc = new Scanner(System.in);
         int m_port_listening = sc.nextInt();
-        
-        Peer peer = new Peer(engine);
 
-        Server m_s = engine.listen(m_port_listening, peer);
+        NioEngine engine = new NioEngine();
+        Acceptor acceptor = new Acceptor();
+        Connector connector = new Connector();
+
+        Server m_s = engine.listen(m_port_listening, acceptor);
 
         InetAddress m_localhost = InetAddress.getByName("localhost");
-        if (m_port_listening == 2006) engine.connect(m_localhost, 2005, peer);
+
+        for (int i = 0; i < m_port_listening - num_min_port; i++) {
+            engine.connect(m_localhost, 2005 + i, connector);
+        }
+
         engine.mainloop();
     }
 }

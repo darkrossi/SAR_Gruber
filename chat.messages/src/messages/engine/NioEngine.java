@@ -18,6 +18,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  *
@@ -29,12 +30,23 @@ public class NioEngine extends Engine {
 
     InetAddress m_localhost;
     ServerSocketChannel m_sch;
-    SocketChannel m_ch;
+    Peer m_peer;
+    int m_port_listening;
 
     Server m_s;
 
+    private static final int DISCONNECTED = 0;
+    private static final int ACCEPTING = 1;
+    private static final int READING_LENGTH = 2;
+    private static final int READING_BYTES = 3;
+
+    int m_state;
+    ByteBuffer m_buf;
+    byte m_seqno;
+
     NioEngine() throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
+        m_peer = new Peer();
     }
 
     /**
@@ -67,58 +79,130 @@ public class NioEngine extends Engine {
                     if (!key.isValid()) {
                         continue;
                     } else if (key.isAcceptable()) {
-                        // a connection was accepted by a ServerSocketChannel.
-                        Peer callbacks = (Peer) key.attachment();
-                        ServerSocketChannel channel = (ServerSocketChannel) key.channel();
 
-                        SocketChannel m_ch = channel.accept();
-                        NioChannel nio_channel = new NioChannel(m_ch);
-                        m_ch.configureBlocking(false);
-                        m_ch.socket().setTcpNoDelay(true);
-                        SelectionKey m_key = register(m_ch, callbacks, SelectionKey.OP_READ);
-//                        ByteBuffer m_buf = ByteBuffer.allocate(4);
+                        ServerSocketChannel channel_server = (ServerSocketChannel) key.channel(); // On récupère son socket de connexion
 
-                        callbacks.accepted(m_s, nio_channel);
+                        SocketChannel channel = channel_server.accept(); // On crée un channel avec celui qui arrive
+                        channel.configureBlocking(false);
+                        channel.socket().setTcpNoDelay(true);
+
+                        NioChannel nio_channel = new NioChannel(channel, null, null); // On crée un NIO channel associé au channel de connexion
+
+                        /**
+                         *
+                         */
+                        register(channel, null, SelectionKey.OP_READ);
+
+                        AcceptCallback acceptor = (AcceptCallback) key.attachment();
+                        acceptor.accepted(m_s, nio_channel);
+
+                        m_peer.add(channel);
+                        int nb_peers = m_peer.getNbPeers();
+                        if (nb_peers == 2) {
+                            m_state = READING_LENGTH;
+                            m_buf = ByteBuffer.allocate(4);
+                            Deliver deliver = new Deliver();
+                            register(channel, deliver, SelectionKey.OP_WRITE);
+                        }
                     } else if (key.isReadable()) {
                         // a channel is ready for reading
-                        SocketChannel ch = (SocketChannel) key.channel();
-                        ByteBuffer m_buf = ByteBuffer.allocate(4);
-//                        m_ch.read(m_buf);
+                        SocketChannel m_ch = (SocketChannel) key.channel();
+                        int len, count = 0;
+                        switch (m_state) {
+                            case READING_LENGTH:
+                                count = m_ch.read(m_buf);
+                                if (count == -1) {
+                                    System.err.println("<<< Pong: end of stream!");
+                                    System.exit(-1);
+                                }
+                                if (m_buf.hasRemaining()) {
+                                    return;
+                                }
+                                m_state = READING_BYTES;
+                                m_buf.position(0);
+                                len = m_buf.getInt();
+                                m_buf = ByteBuffer.allocate(len);
+                            // fallthrough...
+                            case READING_BYTES:
+                                count = m_ch.read(m_buf);
+                                if (count == -1) {
+                                    System.err.println("<<< Pong: end of stream!");
+                                    System.exit(-1);
+                                }
+                                if (m_buf.hasRemaining()) {
+                                    return;
+                                }
+
+                                m_buf.position(0);
+                                byte bytes[] = new byte[m_buf.remaining()];
+                                m_buf.get(bytes);
+
+                                m_state = READING_LENGTH;
+                                m_buf = ByteBuffer.allocate(4);
+
+                                for (int i = 0; i < bytes.length; i++) {
+                                    assert (m_seqno++ == bytes[i]);
+                                }
+
+                                System.out.print("Réception de " + m_ch.getRemoteAddress());
+                                for (int i = 0; i < bytes.length; i++) {
+                                    System.out.print("\t" + bytes[i]);
+                                }
+                                System.out.println();
+                                System.out.flush();
+                        }
 
 //                        NioCallbacks callbacks = (NioCallbacks) key.attachment();
 //                        callbacks.handleReadable(key);
                     } else if (key.isWritable()) {
                         // a channel is ready for writing
-                        Peer callbacks = (Peer) key.attachment();
-                        SocketChannel channel = (SocketChannel) key.channel();
-                        NioChannel nio_channel = new NioChannel(m_ch);
 
-                        int length = 1;
+                        Deliver deliver = (Deliver) key.attachment();
+//                        SocketChannel channel = (SocketChannel) key.channel();
+//                        NioChannel nio_channel = new NioChannel(channel, deliver, null);
+
+                        int length = 3;
                         byte bytes[] = new byte[length];
-                        for (byte i = 0; i < length; i++) {
-                            bytes[i] = (byte) (i);
+                        for (int i = 0; i < length; i++) {
+                            bytes[i] = (byte) (i + 8 * (m_port_listening - 2005));
                         }
 
-                        nio_channel.send(bytes, 0, length);
-                        callbacks.deliver(nio_channel, bytes);
+                        for (int i = 0; i < length; i++) {
+                            byte aByte = bytes[i];
+                            System.out.println("Sent : " + aByte);
+                        }
+
+                        List<SocketChannel> channels = m_peer.getChannels();
+                        for (Iterator<SocketChannel> iterator = channels.iterator(); iterator.hasNext();) {
+                            SocketChannel channel = iterator.next();
+                            NioChannel nio_channel = new NioChannel(channel, deliver, null);
+                            nio_channel.send(bytes, 0, length);
+                        }
 
                         key.interestOps(SelectionKey.OP_READ);
                     } else if (key.isConnectable()) {
                         // a connection was established with a remote server.
-
                         SocketChannel ch = (SocketChannel) key.channel();
-
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
                         ch.finishConnect();
 
                         // always set the READ interest.
-                        key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                        key.interestOps(SelectionKey.OP_READ);
 
                         ConnectCallback callbacks = (ConnectCallback) key.attachment();
                         callbacks.connected(null);
 
-                        register(m_ch, callbacks, SelectionKey.OP_WRITE);
+                        m_peer.add(ch);
+                        int nb_peers = m_peer.getNbPeers();
+                        if (nb_peers == 2) {
+                            m_state = READING_LENGTH;
+                            m_buf = ByteBuffer.allocate(4);
+                            Deliver deliver = new Deliver();
+                            key.interestOps(SelectionKey.OP_WRITE);
+                            key.attach(deliver);
+                        }
+
                     }
                 }
             }
@@ -132,18 +216,20 @@ public class NioEngine extends Engine {
     @Override
     public Server listen(int port, AcceptCallback callback) throws IOException {
 
+        m_port_listening = port;
+
         // create a new non-blocking server socket channel
         m_sch = ServerSocketChannel.open();
         m_sch.configureBlocking(false);
 
         // bind the server socket to the specified address and port
         m_localhost = InetAddress.getByName("localhost");
-        InetSocketAddress isa = new InetSocketAddress(m_localhost, port);
+        InetSocketAddress isa = new InetSocketAddress(m_localhost, m_port_listening);
         m_sch.socket().bind(isa);
 
         register(m_sch, callback, SelectionKey.OP_ACCEPT);
 
-        NioServer nio_server = new NioServer(port);
+        NioServer nio_server = new NioServer(m_port_listening);
         m_s = nio_server;
         return nio_server;
     }
@@ -151,12 +237,11 @@ public class NioEngine extends Engine {
     @Override
     public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, IOException {
         // create a non-blocking socket channel
-        m_ch = SocketChannel.open();
+        SocketChannel m_ch = SocketChannel.open();
         m_ch.configureBlocking(false);
         m_ch.socket().setTcpNoDelay(true);
 
         // be notified when the connection to the server will be accepted
-        // m_key = m_ch.register(m_selector, SelectionKey.OP_CONNECT);
         register(m_ch, callback, SelectionKey.OP_CONNECT);
 
         // request to connect to the server

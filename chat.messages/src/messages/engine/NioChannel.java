@@ -18,11 +18,15 @@ import java.util.logging.Logger;
  * @author Mickaël
  */
 public class NioChannel extends Channel {
-    
-    SocketChannel m_ch;
 
-    public NioChannel(SocketChannel channel) {
-        this.m_ch = channel;
+    SocketChannel m_ch;
+    Deliver deliver;
+    InetSocketAddress remoteAddress;
+
+    public NioChannel(SocketChannel m_ch, Deliver deliver, InetSocketAddress remoteAddress) {
+        this.m_ch = m_ch;
+        this.deliver = deliver;
+        this.remoteAddress = remoteAddress;
     }
 
     @Override
@@ -43,7 +47,7 @@ public class NioChannel extends Channel {
         m_buf.putInt(bytes.length);
         m_buf.put(bytes, 0, bytes.length);
         m_buf.position(0);
-        
+
         try {
             m_ch.write(m_buf);
 //        m_state = SENDING;
@@ -51,9 +55,10 @@ public class NioChannel extends Channel {
             Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
         }
 
+        deliver.deliver(this, bytes);
+
         // set the WRITE interest to be called back when writable,
         // but always leave the READ interest to avoid deadlocks.
-        
     }
 
     @Override

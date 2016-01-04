@@ -9,37 +9,41 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
  * @author Mickaël
  */
-public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
+public class Peer {
 
-    private Engine m_engine;
+    private List<SocketChannel> channels;
 
-    public Peer(Engine m_engine) {
-        this.m_engine = m_engine;
+    public Peer() {
+        this.channels = new ArrayList<>();
     }
 
-    @Override
-    public void accepted(Server server, Channel channel) {
-        System.out.println("I accepted");
+    public void add(SocketChannel channel) {
+        getChannels().add(channel);
     }
 
-    @Override
-    public void closed(Channel channel) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public int getNbPeers() {
+        return getChannels().size();
     }
 
-    @Override
-    public void connected(Channel channel) {
-        System.out.println("I'm connected");
+    /**
+     * @return the channels
+     */
+    public List<SocketChannel> getChannels() {
+        return channels;
     }
 
-    @Override
-    public void deliver(Channel channel, byte[] bytes) {
-        System.out.println("J'ai deliver");
+    /**
+     * @param channels the channels to set
+     */
+    public void setChannels(List<SocketChannel> channels) {
+        this.channels = channels;
     }
 
 }
