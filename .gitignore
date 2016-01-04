@@ -46,3 +46,5 @@ Network Trash Folder
 Temporary Items
 .apdisk
 /chat.messages/nbproject/private/
+/chat.messages/build/
+/chat.messages/dist/
