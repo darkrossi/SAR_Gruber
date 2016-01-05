@@ -1,15 +1,15 @@
 HOW TO LAUNCH THE PROJECT :
   - Run the project.
-  - Give a number of port to the opened console.
+  - Give a port number (>= 2005) to the opened console.
 
 HOW TO RUN TEST (3 peers) :
-  - Run the project 3 times.
+  - Run the project 3 times (i.e. in 3 different consoles).
   - In each console type the number of ports in this order : 2005, 2006, 2007.
-  - As soon as a peer is connected with peer(s) it sends 3 numbers ([0,1,2] for 2005, [8,9,10] for 2006 and [16,17,18] for 2007) in an forever loop.
+  - As soon as a peer is connected with other peer(s) it sends 3 numbers ([0,1,2] for 2005, [8,9,10] for 2006 and [16,17,18] for 2007) in an forever loop.
 
 OVERVIEW OF THE MAIN JAVA CLASSES :
   - Main :
-    - Waits for a number of port
+    - Waits for a port number
     - Creates a NioEngine object
     - Launches the "listen" method of the NioEngine object
     - Launches the "connect" method of the NioEnfine object on the other connected peers
