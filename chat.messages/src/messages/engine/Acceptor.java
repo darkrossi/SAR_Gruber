@@ -14,7 +14,6 @@ public class Acceptor implements AcceptCallback {
     @Override
     public void accepted(Server server, Channel channel) {
         System.out.println("I accepted");
-//        add(server, channel); // On ajoute le nouvel arrivant
     }
 
     @Override

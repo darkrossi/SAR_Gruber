@@ -6,8 +6,6 @@
 package messages.engine;
 
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.nio.channels.ServerSocketChannel;
 import java.util.Scanner;
 
 public class Main {

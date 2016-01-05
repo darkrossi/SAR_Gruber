@@ -28,7 +28,7 @@ public class NioEngine extends Engine {
 
     Selector m_selector;
 
-    InetAddress m_localhost;
+    InetAddress m_localhost = InetAddress.getByName("localhost");
     ServerSocketChannel m_sch;
     Peer m_peer;
     int m_port_listening;
@@ -112,7 +112,7 @@ public class NioEngine extends Engine {
                             case READING_LENGTH:
                                 count = m_ch.read(m_buf);
                                 if (count == -1) {
-                                    System.err.println("<<< Pong: end of stream!");
+                                    System.err.println("End of stream!");
                                     System.exit(-1);
                                 }
                                 if (m_buf.hasRemaining()) {
@@ -122,11 +122,10 @@ public class NioEngine extends Engine {
                                 m_buf.position(0);
                                 len = m_buf.getInt();
                                 m_buf = ByteBuffer.allocate(len);
-                            // fallthrough...
                             case READING_BYTES:
                                 count = m_ch.read(m_buf);
                                 if (count == -1) {
-                                    System.err.println("<<< Pong: end of stream!");
+                                    System.err.println("End of stream!");
                                     System.exit(-1);
                                 }
                                 if (m_buf.hasRemaining()) {
@@ -152,14 +151,8 @@ public class NioEngine extends Engine {
                                 System.out.flush();
                         }
 
-//                        NioCallbacks callbacks = (NioCallbacks) key.attachment();
-//                        callbacks.handleReadable(key);
                     } else if (key.isWritable()) {
                         // a channel is ready for writing
-
-                        Deliver deliver = (Deliver) key.attachment();
-//                        SocketChannel channel = (SocketChannel) key.channel();
-//                        NioChannel nio_channel = new NioChannel(channel, deliver, null);
 
                         int length = 3;
                         byte bytes[] = new byte[length];
@@ -173,8 +166,8 @@ public class NioEngine extends Engine {
                         }
 
                         List<SocketChannel> channels = m_peer.getChannels();
-                        for (Iterator<SocketChannel> iterator = channels.iterator(); iterator.hasNext();) {
-                            SocketChannel channel = iterator.next();
+                        for (SocketChannel channel : channels) {
+                            Deliver deliver = (Deliver) key.attachment();
                             NioChannel nio_channel = new NioChannel(channel, deliver, null);
                             nio_channel.send(bytes, 0, length);
                         }
@@ -223,7 +216,6 @@ public class NioEngine extends Engine {
         m_sch.configureBlocking(false);
 
         // bind the server socket to the specified address and port
-        m_localhost = InetAddress.getByName("localhost");
         InetSocketAddress isa = new InetSocketAddress(m_localhost, m_port_listening);
         m_sch.socket().bind(isa);
 

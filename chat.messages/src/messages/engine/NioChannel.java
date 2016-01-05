@@ -8,7 +8,6 @@ package messages.engine;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -20,10 +19,10 @@ import java.util.logging.Logger;
 public class NioChannel extends Channel {
 
     SocketChannel m_ch;
-    Deliver deliver;
+    DeliverCallback deliver;
     InetSocketAddress remoteAddress;
 
-    public NioChannel(SocketChannel m_ch, Deliver deliver, InetSocketAddress remoteAddress) {
+    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, InetSocketAddress remoteAddress) {
         this.m_ch = m_ch;
         this.deliver = deliver;
         this.remoteAddress = remoteAddress;
@@ -31,12 +30,12 @@ public class NioChannel extends Channel {
 
     @Override
     public void setDeliverCallback(DeliverCallback callback) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        this.deliver = callback;
     }
 
     @Override
     public InetSocketAddress getRemoteAddress() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return this.remoteAddress;
     }
 
     @Override
@@ -56,9 +55,6 @@ public class NioChannel extends Channel {
         }
 
         deliver.deliver(this, bytes);
-
-        // set the WRITE interest to be called back when writable,
-        // but always leave the READ interest to avoid deadlocks.
     }
 
     @Override
