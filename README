@@ -1,3 +1,11 @@
-Exemple : 3 peers
-  - Après avoir lancé le programme il faut renseigner le port d'écoute
-  - On choisit 2005 puis 2006 puis 2007
+HOW TO LAUNCH THE PROJECT :
+  - Run the project.
+  - Give a number of port to the opened console.
+
+HOW TO RUN TEST (3 peers) :
+  - Run the project 3 times.
+  - In each console type the number of ports in this order : 2005, 2006, 2007.
+  - As soon as a peer is connected with two other peers it sends 3 numbers ([0,1,2] for 2005, [8,9,10] for 2006 and [16,17,18] for 2007).
+
+OVERVIEW OF THE MAIN JAVA CLASSES :
+  - NioEngine : 

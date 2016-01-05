@@ -35,8 +35,8 @@ public class NioEngine extends Engine {
 
     Server m_s;
 
-    private static final int DISCONNECTED = 0;
-    private static final int ACCEPTING = 1;
+//    private static final int DISCONNECTED = 0;
+//    private static final int ACCEPTING = 1;
     private static final int READING_LENGTH = 2;
     private static final int READING_BYTES = 3;
 

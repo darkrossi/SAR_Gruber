@@ -18,12 +18,13 @@ public class Main {
          */
         Scanner sc = new Scanner(System.in);
         int m_port_listening = sc.nextInt();
+        sc.close();
 
         NioEngine engine = new NioEngine();
         Acceptor acceptor = new Acceptor();
         Connector connector = new Connector();
 
-        Server m_s = engine.listen(m_port_listening, acceptor);
+        engine.listen(m_port_listening, acceptor);
 
         InetAddress m_localhost = InetAddress.getByName("localhost");
 
