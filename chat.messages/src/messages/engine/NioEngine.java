@@ -35,10 +35,13 @@ public class NioEngine extends Engine {
 
     Server m_s;
 
-//    private static final int DISCONNECTED = 0;
-//    private static final int ACCEPTING = 1;
+    private static final int DISCONNECTED = 0;
+    private static final int ACCEPTING = 1;
     private static final int READING_LENGTH = 2;
     private static final int READING_BYTES = 3;
+    private static final int CONNECTING = 4;
+    private static final int CONNECTED = 5;
+    private static final int SENDING = 6;
 
     int m_state;
     ByteBuffer m_buf;
@@ -47,6 +50,7 @@ public class NioEngine extends Engine {
     NioEngine() throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
         m_peer = new Peer();
+        m_state = DISCONNECTED;
     }
 
     /**
@@ -92,6 +96,8 @@ public class NioEngine extends Engine {
                          *
                          */
                         register(channel, null, SelectionKey.OP_READ);
+                        
+                        m_state = READING_LENGTH;
 
                         AcceptCallback acceptor = (AcceptCallback) key.attachment();
                         acceptor.accepted(m_s, nio_channel);
@@ -165,6 +171,9 @@ public class NioEngine extends Engine {
                             System.out.println("Sent : " + aByte);
                         }
 
+                        assert (m_state == CONNECTED);
+                        m_state = SENDING;
+                        
                         List<SocketChannel> channels = m_peer.getChannels();
                         for (SocketChannel channel : channels) {
                             Deliver deliver = (Deliver) key.attachment();
@@ -172,6 +181,7 @@ public class NioEngine extends Engine {
                             nio_channel.send(bytes, 0, length);
                         }
 
+                        m_state = CONNECTED;
                         key.interestOps(SelectionKey.OP_READ);
                     } else if (key.isConnectable()) {
                         // a connection was established with a remote server.
@@ -182,6 +192,7 @@ public class NioEngine extends Engine {
 
                         // always set the READ interest.
                         key.interestOps(SelectionKey.OP_READ);
+                        m_state = CONNECTED;
 
                         ConnectCallback callbacks = (ConnectCallback) key.attachment();
                         callbacks.connected(null);
@@ -210,6 +221,8 @@ public class NioEngine extends Engine {
     public Server listen(int port, AcceptCallback callback) throws IOException {
 
         m_port_listening = port;
+        
+        m_state = ACCEPTING;
 
         // create a new non-blocking server socket channel
         m_sch = ServerSocketChannel.open();
@@ -229,6 +242,9 @@ public class NioEngine extends Engine {
     @Override
     public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, IOException {
         // create a non-blocking socket channel
+        assert (m_state == DISCONNECTED);
+        m_state = CONNECTING;
+        
         SocketChannel m_ch = SocketChannel.open();
         m_ch.configureBlocking(false);
         m_ch.socket().setTcpNoDelay(true);
