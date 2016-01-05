@@ -82,10 +82,9 @@ public class NioEngine extends Engine {
 
     @Override
     public void mainloop() {
-
-        // Création thread ?
         long delay = 0;
         try {
+        	// On capture le thread principal dans une boucle infinie
             for (;;) {
                 getM_selector().select(delay);
                 Iterator<?> selectedKeys = this.getM_selector().selectedKeys().iterator();
