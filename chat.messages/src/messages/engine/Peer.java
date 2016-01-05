@@ -10,21 +10,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- *
+ * Classe permettant de regrouper les channels associés aux peers connectés
  * @author Mickaël
  */
 public class Peer {
 
     private List<SocketChannel> channels;
 
+    /**
+     * Constructor
+     */
     public Peer() {
         this.channels = new ArrayList<>();
     }
 
+    /**
+     * Ajout d'un channel à la liste
+     * @param channel 
+     */
     public void add(SocketChannel channel) {
         getChannels().add(channel);
     }
 
+    /**
+     * 
+     * @return le nombre de clients connectés
+     */
     public int getNbPeers() {
         return getChannels().size();
     }

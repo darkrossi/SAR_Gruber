@@ -13,6 +13,10 @@ public class NioServer extends Server {
 
     private int m_port;
     
+    /**
+     * Constructor
+     * @param port 
+     */
     public NioServer(int port) {
         this.m_port = port;
     }

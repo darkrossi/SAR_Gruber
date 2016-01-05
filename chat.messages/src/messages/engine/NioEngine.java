@@ -28,9 +28,10 @@ public class NioEngine extends Engine {
 
     Selector m_selector;
 
+    Peer m_peer; // Représente la VM et contient les channels associés aux personnes auxquelle elle est connectée
+
     InetAddress m_localhost = InetAddress.getByName("localhost");
-    ServerSocketChannel m_sch;
-    Peer m_peer;
+    ServerSocketChannel m_sch; // Channel d'écoute de connexion
     int m_port_listening;
 
     Server m_s;
@@ -47,6 +48,11 @@ public class NioEngine extends Engine {
     ByteBuffer m_buf;
     byte m_seqno;
 
+    /**
+     * Constructor
+     *
+     * @throws IOException
+     */
     NioEngine() throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
         m_peer = new Peer();
@@ -96,7 +102,7 @@ public class NioEngine extends Engine {
                          *
                          */
                         register(channel, null, SelectionKey.OP_READ);
-                        
+
                         m_state = READING_LENGTH;
 
                         AcceptCallback acceptor = (AcceptCallback) key.attachment();
@@ -104,6 +110,10 @@ public class NioEngine extends Engine {
 
                         m_peer.add(channel);
                         int nb_peers = m_peer.getNbPeers();
+                        /**
+                         * Si on est connecté avec deux autres personnes alors
+                         * on annonce qu'on est prêt à envoyer des nombres
+                         */
                         if (nb_peers == 2) {
                             m_state = READING_LENGTH;
                             m_buf = ByteBuffer.allocate(4);
@@ -173,7 +183,7 @@ public class NioEngine extends Engine {
 
                         assert (m_state == CONNECTED);
                         m_state = SENDING;
-                        
+
                         List<SocketChannel> channels = m_peer.getChannels();
                         for (SocketChannel channel : channels) {
                             Deliver deliver = (Deliver) key.attachment();
@@ -199,6 +209,10 @@ public class NioEngine extends Engine {
 
                         m_peer.add(ch);
                         int nb_peers = m_peer.getNbPeers();
+                        /**
+                         * Si on est connecté avec deux autres personnes alors
+                         * on annonce qu'on est prêt à envoyer des nombres
+                         */
                         if (nb_peers == 2) {
                             m_state = READING_LENGTH;
                             m_buf = ByteBuffer.allocate(4);
@@ -221,7 +235,7 @@ public class NioEngine extends Engine {
     public Server listen(int port, AcceptCallback callback) throws IOException {
 
         m_port_listening = port;
-        
+
         m_state = ACCEPTING;
 
         // create a new non-blocking server socket channel
@@ -244,7 +258,7 @@ public class NioEngine extends Engine {
         // create a non-blocking socket channel
         assert (m_state == DISCONNECTED);
         m_state = CONNECTING;
-        
+
         SocketChannel m_ch = SocketChannel.open();
         m_ch.configureBlocking(false);
         m_ch.socket().setTcpNoDelay(true);

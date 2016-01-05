@@ -22,6 +22,12 @@ public class NioChannel extends Channel {
     DeliverCallback deliver;
     InetSocketAddress remoteAddress;
 
+    /**
+     * Constructor
+     * @param m_ch
+     * @param deliver
+     * @param remoteAddress 
+     */
     public NioChannel(SocketChannel m_ch, DeliverCallback deliver, InetSocketAddress remoteAddress) {
         this.m_ch = m_ch;
         this.deliver = deliver;
@@ -40,8 +46,6 @@ public class NioChannel extends Channel {
 
     @Override
     public void send(byte[] bytes, int offset, int length) {
-//        assert (m_state == CONNECTED);
-
         ByteBuffer m_buf = ByteBuffer.allocate(4 + bytes.length);
         m_buf.putInt(bytes.length);
         m_buf.put(bytes, 0, bytes.length);
@@ -49,7 +53,6 @@ public class NioChannel extends Channel {
 
         try {
             m_ch.write(m_buf);
-//        m_state = SENDING;
         } catch (IOException ex) {
             Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
         }
