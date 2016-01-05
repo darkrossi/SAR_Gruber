@@ -13,7 +13,7 @@ public class Deliver implements DeliverCallback {
 
     @Override
     public void deliver(Channel channel, byte[] bytes) {
-        System.out.println("J'ai deliver");
+        //System.out.println("J'ai deliver");
     }
     
 }

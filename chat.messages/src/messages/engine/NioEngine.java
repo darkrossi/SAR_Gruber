@@ -17,6 +17,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -26,9 +27,9 @@ import java.util.List;
  */
 public class NioEngine extends Engine {
 
-    Selector m_selector;
+    private Selector m_selector;
 
-    Peer m_peer; // Représente la VM et contient les channels associés aux personnes auxquelle elle est connectée
+    private Peer m_peer; // Représente la VM et contient les channels associés aux personnes auxquelle elle est connectée
 
     InetAddress m_localhost = InetAddress.getByName("localhost");
     ServerSocketChannel m_sch; // Channel d'écoute de connexion
@@ -44,9 +45,13 @@ public class NioEngine extends Engine {
     private static final int CONNECTED = 5;
     private static final int SENDING = 6;
 
-    int m_state;
-    ByteBuffer m_buf;
+    private int m_state;
+    private ByteBuffer m_buf;
     byte m_seqno;
+
+    int nb_msg = 0;
+
+    List<SelectionKey> m_sk_l;
 
     /**
      * Constructor
@@ -57,6 +62,7 @@ public class NioEngine extends Engine {
         m_selector = SelectorProvider.provider().openSelector();
         m_peer = new Peer();
         m_state = DISCONNECTED;
+        m_sk_l = new ArrayList<>();
     }
 
     /**
@@ -69,7 +75,7 @@ public class NioEngine extends Engine {
      */
     public SelectionKey register(SelectableChannel ch, Object callbacks, int interests) throws ClosedChannelException {
         SelectionKey key;
-        key = ch.register(m_selector, interests);
+        key = ch.register(getM_selector(), interests);
         key.attach(callbacks);
         return key;
     }
@@ -81,8 +87,8 @@ public class NioEngine extends Engine {
         long delay = 0;
         try {
             for (;;) {
-                m_selector.select(delay);
-                Iterator<?> selectedKeys = this.m_selector.selectedKeys().iterator();
+                getM_selector().select(delay);
+                Iterator<?> selectedKeys = this.getM_selector().selectedKeys().iterator();
                 if (selectedKeys.hasNext()) {
                     SelectionKey key = (SelectionKey) selectedKeys.next();
                     selectedKeys.remove();
@@ -98,59 +104,54 @@ public class NioEngine extends Engine {
 
                         NioChannel nio_channel = new NioChannel(channel, null, null); // On crée un NIO channel associé au channel de connexion
 
+                        AcceptCallback acceptor = (AcceptCallback) key.attachment();
+
                         /**
                          *
                          */
-                        register(channel, null, SelectionKey.OP_READ);
+                        Deliver deliver = new Deliver();
+                        SelectionKey sk = register(channel, deliver, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
-                        m_state = READING_LENGTH;
+                        m_sk_l.add(sk);
 
-                        AcceptCallback acceptor = (AcceptCallback) key.attachment();
+                        getM_peer().add(channel);
+                        m_buf = ByteBuffer.allocate(4);
+                        m_state = CONNECTED;
+
                         acceptor.accepted(m_s, nio_channel);
-
-                        m_peer.add(channel);
-                        int nb_peers = m_peer.getNbPeers();
-                        /**
-                         * Si on est connecté avec deux autres personnes alors
-                         * on annonce qu'on est prêt à envoyer des nombres
-                         */
-                        if (nb_peers == 2) {
-                            m_state = READING_LENGTH;
-                            m_buf = ByteBuffer.allocate(4);
-                            Deliver deliver = new Deliver();
-                            register(channel, deliver, SelectionKey.OP_WRITE);
-                        }
                     } else if (key.isReadable()) {
                         // a channel is ready for reading
                         SocketChannel m_ch = (SocketChannel) key.channel();
                         int len, count = 0;
-                        switch (m_state) {
+                        switch (getM_state()) {
+                            case CONNECTED:
+                                m_state = READING_LENGTH;
                             case READING_LENGTH:
-                                count = m_ch.read(m_buf);
+                                count = m_ch.read(getM_buf());
                                 if (count == -1) {
                                     System.err.println("End of stream!");
                                     System.exit(-1);
                                 }
-                                if (m_buf.hasRemaining()) {
+                                if (getM_buf().hasRemaining()) {
                                     return;
                                 }
                                 m_state = READING_BYTES;
-                                m_buf.position(0);
-                                len = m_buf.getInt();
+                                getM_buf().position(0);
+                                len = getM_buf().getInt();
                                 m_buf = ByteBuffer.allocate(len);
                             case READING_BYTES:
-                                count = m_ch.read(m_buf);
+                                count = m_ch.read(getM_buf());
                                 if (count == -1) {
                                     System.err.println("End of stream!");
                                     System.exit(-1);
                                 }
-                                if (m_buf.hasRemaining()) {
+                                if (getM_buf().hasRemaining()) {
                                     return;
                                 }
 
-                                m_buf.position(0);
-                                byte bytes[] = new byte[m_buf.remaining()];
-                                m_buf.get(bytes);
+                                getM_buf().position(0);
+                                byte bytes[] = new byte[getM_buf().remaining()];
+                                getM_buf().get(bytes);
 
                                 m_state = READING_LENGTH;
                                 m_buf = ByteBuffer.allocate(4);
@@ -165,6 +166,7 @@ public class NioEngine extends Engine {
                                 }
                                 System.out.println();
                                 System.out.flush();
+                                key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
                         }
 
                     } else if (key.isWritable()) {
@@ -176,15 +178,10 @@ public class NioEngine extends Engine {
                             bytes[i] = (byte) (i + 8 * (m_port_listening - 2005));
                         }
 
-                        for (int i = 0; i < length; i++) {
-                            byte aByte = bytes[i];
-                            System.out.println("Sent : " + aByte);
-                        }
-
-                        assert (m_state == CONNECTED);
+                        assert (getM_state() == CONNECTED);
                         m_state = SENDING;
 
-                        List<SocketChannel> channels = m_peer.getChannels();
+                        List<SocketChannel> channels = getM_peer().getChannels();
                         for (SocketChannel channel : channels) {
                             Deliver deliver = (Deliver) key.attachment();
                             NioChannel nio_channel = new NioChannel(channel, deliver, null);
@@ -194,33 +191,26 @@ public class NioEngine extends Engine {
                         m_state = CONNECTED;
                         key.interestOps(SelectionKey.OP_READ);
                     } else if (key.isConnectable()) {
-                        // a connection was established with a remote server.
                         SocketChannel ch = (SocketChannel) key.channel();
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
                         ch.finishConnect();
 
-                        // always set the READ interest.
-                        key.interestOps(SelectionKey.OP_READ);
-                        m_state = CONNECTED;
-
                         ConnectCallback callbacks = (ConnectCallback) key.attachment();
-                        callbacks.connected(null);
 
+                        // always set the READ interest.
+                        m_sk_l.add(key);
                         m_peer.add(ch);
-                        int nb_peers = m_peer.getNbPeers();
-                        /**
-                         * Si on est connecté avec deux autres personnes alors
-                         * on annonce qu'on est prêt à envoyer des nombres
-                         */
-                        if (nb_peers == 2) {
-                            m_state = READING_LENGTH;
-                            m_buf = ByteBuffer.allocate(4);
-                            Deliver deliver = new Deliver();
-                            key.interestOps(SelectionKey.OP_WRITE);
-                            key.attach(deliver);
-                        }
+                        Deliver deliver = new Deliver();
+                        key.attach(deliver);
+                        key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
+//                        BroadcastThread broadcast_thread = new BroadcastThread(m_sk_l);
+//                        broadcast_thread.start();
+
+                        m_buf = ByteBuffer.allocate(4);
+                        m_state = CONNECTED;
+                        callbacks.connected(null);
                     }
                 }
             }
@@ -256,7 +246,7 @@ public class NioEngine extends Engine {
     @Override
     public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, IOException {
         // create a non-blocking socket channel
-        assert (m_state == DISCONNECTED);
+        assert (getM_state() == DISCONNECTED);
         m_state = CONNECTING;
 
         SocketChannel m_ch = SocketChannel.open();
@@ -268,6 +258,41 @@ public class NioEngine extends Engine {
 
         // request to connect to the server
         m_ch.connect(new InetSocketAddress(hostAddress, port));
+    }
+
+    /**
+     * @return the m_selector
+     */
+    public Selector getM_selector() {
+        return m_selector;
+    }
+
+    /**
+     * @param m_selector the m_selector to set
+     */
+    public void setM_selector(Selector m_selector) {
+        this.m_selector = m_selector;
+    }
+
+    /**
+     * @return the m_peer
+     */
+    public Peer getM_peer() {
+        return m_peer;
+    }
+
+    /**
+     * @return the m_state
+     */
+    public int getM_state() {
+        return m_state;
+    }
+
+    /**
+     * @return the m_buf
+     */
+    public ByteBuffer getM_buf() {
+        return m_buf;
     }
 
 }
