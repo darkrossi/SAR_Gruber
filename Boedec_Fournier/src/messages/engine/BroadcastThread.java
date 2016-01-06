@@ -19,10 +19,12 @@ import java.util.logging.Logger;
  */
 public class BroadcastThread extends Thread {
 
-    private List<SelectionKey> m_sk_l;
+    private Peer m_peer;
+    private NioEngine m_engine;
 
-    public BroadcastThread(List<SelectionKey> m_sk_l) {
-        this.m_sk_l = m_sk_l;
+    public BroadcastThread(Peer m_peer, NioEngine m_engine) {
+        this.m_peer = m_peer;
+        this.m_engine = m_engine;
     }
 
     @Override
@@ -30,22 +32,19 @@ public class BroadcastThread extends Thread {
         super.run(); //To change body of generated methods, choose Tools | Templates.
 
         for (;;) {
-            for (SelectionKey key : m_sk_l) {
-                if (!key.isValid()) {
-                    continue;
-                } else if (key.isAcceptable() || key.isConnectable()) {
-                    // Nothing
-                } else if (key.isReadable() && key.isWritable()) {
-                    key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-                    System.out.println("On passe dans le else if voulu");
-                }
+
+            List<Channel> channels = m_peer.getChannels();
+            for (Channel channel : channels) {
+                channel.sending();
             }
+            
+            m_engine.getM_selector().wakeup();
+
             try {
-                sleep(3000); // 3 secondes
+                sleep(6000); // 3 secondes
             } catch (InterruptedException ex) {
                 interrupt();
             }
         }
-
     }
 }

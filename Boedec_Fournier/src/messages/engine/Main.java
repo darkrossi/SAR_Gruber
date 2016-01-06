@@ -21,22 +21,22 @@ public class Main {
         sc.close();
 
         NioEngine engine = new NioEngine();
-        Acceptor acceptor = new Acceptor();
-        Connector connector = new Connector();
+        Peer peer = new Peer();
 
         /**
          * On écoute des connexions
          */
-        engine.listen(m_port_listening, acceptor);
+        engine.listen(m_port_listening, peer);
 
         /**
          * On se connecte avec les autres peers présents
          */
         InetAddress m_localhost = InetAddress.getByName("localhost");
         for (int i = 0; i < m_port_listening - num_min_port; i++) {
-            engine.connect(m_localhost, 2005 + i, connector);
+            engine.connect(m_localhost, 2005 + i, peer);
         }
 
         engine.mainloop();
+
     }
 }
