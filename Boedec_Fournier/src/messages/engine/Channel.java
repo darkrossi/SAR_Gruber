@@ -1,14 +1,20 @@
 package messages.engine;
 
 import java.net.InetSocketAddress;
-//import java.nio.ByteBuffer;
-//import java.nio.channels.SocketChannel;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 /**
  * This class wraps an end-point of a channel. It allows to send and receive
  * messages, stored in ByteBuffers.
  */
 public abstract class Channel {
+    
+    SocketChannel m_ch;
+    DeliverCallback m_deliver;
+    InetSocketAddress m_remoteAddress;
+
+    ByteBuffer m_buf_read, m_buf_write;
 
     /**
      * Set the callback to deliver messages to.

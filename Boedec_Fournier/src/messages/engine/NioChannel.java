@@ -20,11 +20,6 @@ import sun.nio.ch.SelChImpl;
  */
 public class NioChannel extends Channel {
 
-    SocketChannel m_ch;
-    DeliverCallback m_deliver;
-    InetSocketAddress m_remoteAddress;
-
-    ByteBuffer m_buf_read, m_buf_write;
     int m_state_read, m_state_write;
     SelectionKey m_key;
 
@@ -45,7 +40,7 @@ public class NioChannel extends Channel {
      * @param deliver
      * @param remoteAddress
      */
-    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key) {
+    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa) {
         this.m_ch = m_ch;
         this.m_deliver = deliver;
 //        this.m_remoteAddress = m_ch.socket().get;
@@ -54,7 +49,8 @@ public class NioChannel extends Channel {
         m_state_read = READING_LENGTH;
         m_buf_read = ByteBuffer.allocate(4);
         m_state_write = CONNECTED;
-        m_buf_write = ByteBuffer.allocate(4);
+
+        m_remoteAddress = isa;
     }
 
     @Override
@@ -72,21 +68,41 @@ public class NioChannel extends Channel {
         assert (m_state_write == CONNECTED);
         m_state_write = SENDING;
 
+        /**
+         * On a un message [timestamp | type | data]
+         */
+        byte type_message_sent = bytes[1];
+        byte timestamp_message_sent = bytes[0];
+
         ByteBuffer m_buf = ByteBuffer.allocate(4 + bytes.length);
         m_buf.putInt(bytes.length);
         m_buf.put(bytes, 0, bytes.length);
         m_buf.position(0);
 
         try {
+//            System.out.println("MESSAGE SENT");
             m_ch.write(m_buf);
         } catch (IOException ex) {
             Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
         }
 
+        /**
+         * Si c'est de la data qui a été envoyé alors on envoie aussi un ack
+         */
+        if (type_message_sent == 0) {
+//            System.out.println("On tente d'envoyer un ACK");
+            byte bytes2[] = new byte[3];
+            bytes2[2] = timestamp_message_sent;
+            timestamp_message_sent++;
+            bytes2[1] = 1;
+            bytes2[0] = timestamp_message_sent;
+
+            this.send(bytes2, 0, bytes2.length);
+        }
+
         m_state_write = CONNECTED;
         m_key.interestOps(SelectionKey.OP_READ);
 
-        m_deliver.deliver(this, bytes);
     }
 
     @Override
@@ -133,12 +149,25 @@ public class NioChannel extends Channel {
                         assert (m_seqno++ == bytes[i]);
                     }
 
-                    System.out.println("Je viens de recevoir ce message : ");
-                    for (int i = 0; i < bytes.length; i++) {
-                        System.out.print("\t" + bytes[i]);
+//                    System.out.println("MESSAGE RECEIVED");
+                    
+                    m_deliver.deliver(this, bytes);
+
+                    /**
+                     * Si c'était de la data alors on envoie un ACK
+                     */
+                    byte type_message_received = bytes[1];
+                    byte timestamp_message_received = bytes[0];
+                    if (type_message_received == 0) {
+                        byte bytes2[] = new byte[3];
+                        bytes2[2] = timestamp_message_received;
+                        bytes2[1] = 1;
+                        timestamp_message_received++;
+                        bytes2[0] = timestamp_message_received;
+
+                        this.send(bytes2, 0, bytes2.length);
                     }
-                    System.out.println();
-                    System.out.flush();
+
                     m_key.interestOps(SelectionKey.OP_READ);
             }
         } catch (IOException ex) {

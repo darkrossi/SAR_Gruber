@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
@@ -17,7 +16,6 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -81,9 +79,11 @@ public class NioEngine extends Engine {
                         channel.configureBlocking(false);
                         channel.socket().setTcpNoDelay(true);
 
+                        InetSocketAddress isa = (InetSocketAddress) channel.getRemoteAddress();
+
                         Peer peer = (Peer) key.attachment();
                         SelectionKey sk = register(channel, peer, SelectionKey.OP_READ);
-                        NioChannel nio_channel = new NioChannel(channel, peer, sk); // On crée un NIO channel associé au channel de connexion
+                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa); // On crée un NIO channel associé au channel de connexion
 
                         peer.accepted(null, nio_channel);
 
@@ -96,37 +96,27 @@ public class NioEngine extends Engine {
                     } else if (key.isReadable()) {
                         // a channel is ready for reading
                         SocketChannel m_ch = (SocketChannel) key.channel();
+                        InetSocketAddress isa = (InetSocketAddress) m_ch.getRemoteAddress();
 
                         Peer peer = (Peer) key.attachment();
-
-                        NioChannel nio_channel = new NioChannel(m_ch, peer, key);
-                        nio_channel.read();
+                        peer.read(isa);
 
                     } else if (key.isWritable()) {
                         // a channel is ready for writing
 
-                        int length = 3;
-                        byte bytes[] = new byte[length];
-                        for (int i = 0; i < length; i++) {
-                            bytes[i] = (byte) (i + 8 * (m_port_listening - 2005));
-                        }
-
                         Peer peer = (Peer) key.attachment();
-                        List<Channel> channels = peer.getChannels();
-                        for (Channel channel : channels) {
-                            channel.send(bytes, 0, length);
-                        }
+                        peer.send();
 
                     } else if (key.isConnectable()) {
                         SocketChannel ch = (SocketChannel) key.channel();
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
                         ch.finishConnect();
+                        InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
 
                         Peer peer = (Peer) key.attachment();
 
-                        NioChannel nio_channel = new NioChannel(ch, peer, key);
-
+                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa);
                         peer.connected(nio_channel);
 
                         key.interestOps(SelectionKey.OP_READ);

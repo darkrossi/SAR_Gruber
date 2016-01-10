@@ -21,7 +21,7 @@ public class Main {
         sc.close();
 
         NioEngine engine = new NioEngine();
-        Peer peer = new Peer();
+        Peer peer = new Peer(engine);
 
         /**
          * On écoute des connexions
