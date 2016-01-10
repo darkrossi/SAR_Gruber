@@ -6,6 +6,7 @@
 package messages.engine;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -17,6 +18,8 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -99,7 +102,10 @@ public class NioEngine extends Engine {
                         InetSocketAddress isa = (InetSocketAddress) m_ch.getRemoteAddress();
 
                         Peer peer = (Peer) key.attachment();
-                        peer.read(isa);
+                        boolean isOk = peer.read(isa);
+                        if (!isOk) {
+                            m_selector.selectedKeys().remove(key);
+                        }
 
                     } else if (key.isWritable()) {
                         // a channel is ready for writing
@@ -113,21 +119,24 @@ public class NioEngine extends Engine {
                         SocketChannel ch = (SocketChannel) key.channel();
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
-                        ch.finishConnect();
+                        try {
+                            ch.finishConnect();
+                            InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
 
-                        InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
+                            Peer peer = (Peer) key.attachment();
 
-                        Peer peer = (Peer) key.attachment();
+                            NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
+                            peer.connected(nio_channel);
 
-                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
-                        peer.connected(nio_channel);
+                            key.interestOps(SelectionKey.OP_READ);
 
-                        key.interestOps(SelectionKey.OP_READ);
+                            if (!thread_launched) {
+                                BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
+                                broadcast_thread.start();
+                                thread_launched = true;
+                            }
+                        } catch (ConnectException ex) {
 
-                        if (!thread_launched) {
-                            BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
-                            broadcast_thread.start();
-                            thread_launched = true;
                         }
                     }
                 }
@@ -160,7 +169,7 @@ public class NioEngine extends Engine {
     }
 
     @Override
-    public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, IOException {
+    public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, ClosedChannelException, IOException {
         // create a non-blocking socket channel
 //        assert (getM_state() == DISCONNECTED);
 //        m_state = CONNECTING;
@@ -169,11 +178,18 @@ public class NioEngine extends Engine {
         m_ch.configureBlocking(false);
         m_ch.socket().setTcpNoDelay(true);
 
+        // request to connect to the server
+        try {
+            m_ch.connect(new InetSocketAddress(hostAddress, port));
+        } catch (SecurityException ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (ConnectException ex) {
+            System.out.println("Impossible de se connecter");
+            return;
+        }
         // be notified when the connection to the server will be accepted
         register(m_ch, callback, SelectionKey.OP_CONNECT);
 
-        // request to connect to the server
-        m_ch.connect(new InetSocketAddress(hostAddress, port));
     }
 
     /**

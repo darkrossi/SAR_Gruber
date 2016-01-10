@@ -162,9 +162,15 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 //        this.m_engine.getM_selector().wakeup();
     }
 
-    void read(InetSocketAddress isa) {
+    boolean read(InetSocketAddress isa) {
         Channel channel = this.getM_channels().get(isa);
-        channel.read();
+        if (channel == null) {
+            return false;
+        } else {
+            channel.read();
+            return true;
+        }
+
     }
 
     void send() {
@@ -226,13 +232,14 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         synchronized (this.m_messages) {
             ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
             int index = listeMessages.indexOf(msg);
-            try {
-                result = listeMessages.get(index);
-            } catch (ArrayIndexOutOfBoundsException ex) {
+            result = listeMessages.get(index);
 
-            }
         }
         return result;
+    }
+
+    void imDead(NioChannel aThis) {
+        m_channels.remove(aThis.getRemoteAddress());
     }
 
 }

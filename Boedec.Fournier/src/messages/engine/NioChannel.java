@@ -89,9 +89,8 @@ public class NioChannel extends Channel {
         try {
             m_ch.write(m_buf);
         } catch (IOException ex) {
-            Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (StackOverflowError ex){
-            System.out.println("Here");
+            m_peer.imDead(this);
+            return;
         }
 
         /**
@@ -115,11 +114,7 @@ public class NioChannel extends Channel {
             }
 
             byte[] tabIa = ia.getAddress();
-            try {
-                System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
-            } catch (ArrayIndexOutOfBoundsException ex) {
-                System.out.println("Here");
-            }
+            System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
 
             m_peer.addMessageToSend(bytes2);
             m_peer.send();
@@ -205,11 +200,7 @@ public class NioChannel extends Channel {
                         }
 
                         byte[] tabIa = ia.getAddress();
-                        try {
-                            System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
-                        } catch (ArrayIndexOutOfBoundsException ex) {
-                            System.out.println("Here");
-                        }
+                        System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
 
                         m_peer.addMessageToSend(bytes2);
                         m_peer.send();
@@ -218,7 +209,7 @@ public class NioChannel extends Channel {
                     m_key.interestOps(SelectionKey.OP_READ);
             }
         } catch (IOException ex) {
-            Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
+            m_peer.imDead(this);
         }
     }
 

@@ -60,7 +60,7 @@ public class BroadcastThread extends Thread {
             m_engine.getM_selector().wakeup();
 
             try {
-                sleep(6000); // 3 secondes
+                sleep(2000); // 3 secondes
             } catch (InterruptedException ex) {
                 interrupt();
             }
