@@ -6,6 +6,7 @@
 package messages.engine;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -33,6 +34,8 @@ public class NioChannel extends Channel {
     private static final int CONNECTED = 5;
     private static final int SENDING = 6;
 
+    private Peer m_peer;
+
     /**
      * Constructor
      *
@@ -40,7 +43,7 @@ public class NioChannel extends Channel {
      * @param deliver
      * @param remoteAddress
      */
-    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa) {
+    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer) {
         this.m_ch = m_ch;
         this.m_deliver = deliver;
 //        this.m_remoteAddress = m_ch.socket().get;
@@ -51,6 +54,8 @@ public class NioChannel extends Channel {
         m_state_write = CONNECTED;
 
         m_remoteAddress = isa;
+
+        m_peer = peer;
     }
 
     @Override
@@ -90,14 +95,38 @@ public class NioChannel extends Channel {
          * Si c'est de la data qui a été envoyé alors on envoie aussi un ack
          */
         if (type_message_sent == 0) {
-//            System.out.println("On tente d'envoyer un ACK");
-            byte bytes2[] = new byte[3];
+            System.out.println("ACK LOCAL_MESSAGE");
+            byte bytes2[] = new byte[11];
             bytes2[2] = timestamp_message_sent;
             timestamp_message_sent++;
             bytes2[1] = 1;
             bytes2[0] = timestamp_message_sent;
 
+            InetAddress ia = null;
+            int port = 0;
+            try {
+                ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
+                port = ((InetSocketAddress) this.m_ch.getLocalAddress()).getPort();
+            } catch (IOException ex) {
+                Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            byte[] tabIa = ia.getAddress();
+            for (int i = 0; i < tabIa.length; i++) {
+                bytes2[3 + i] = tabIa[i];
+            }
+
+            ByteBuffer b = ByteBuffer.allocate(4);
+            b.putInt(port);
+            byte[] result = b.array();
+            for (int i = 0; i < result.length; i++) {
+                byte c = result[i];
+                bytes2[7 + i] = c;
+            }
+
             this.send(bytes2, 0, bytes2.length);
+        } else {
+            System.out.println("ACK SENT");
+
         }
 
         m_state_write = CONNECTED;
@@ -150,23 +179,41 @@ public class NioChannel extends Channel {
                     }
 
 //                    System.out.println("MESSAGE RECEIVED");
-                    
-                    m_deliver.deliver(this, bytes);
-
                     /**
-                     * Si c'était de la data alors on envoie un ACK
+                     * Si c'était de la data alors on envoie un ACK [timestamp |
+                     * type | timestamp_ack | address]
                      */
                     byte type_message_received = bytes[1];
                     byte timestamp_message_received = bytes[0];
                     if (type_message_received == 0) {
-                        byte bytes2[] = new byte[3];
-                        bytes2[2] = timestamp_message_received;
-                        bytes2[1] = 1;
-                        timestamp_message_received++;
-                        bytes2[0] = timestamp_message_received;
+                        System.out.println("ACK REMOTE_MESSAGE");
 
-                        this.send(bytes2, 0, bytes2.length);
+                        byte bytes2[] = new byte[10];
+                        bytes2[1] = timestamp_message_received;
+                        bytes2[0] = 1;
+
+                        InetAddress ia = this.m_remoteAddress.getAddress();
+                        byte[] tabIa = ia.getAddress();
+                        for (int i = 0; i < tabIa.length; i++) {
+                            bytes2[2 + i] = tabIa[i];
+                        }
+
+                        int port = this.m_remoteAddress.getPort();
+
+                        ByteBuffer b = ByteBuffer.allocate(4);
+                        b.putInt(port);
+                        byte[] result = b.array();
+                        for (int i = 0; i < result.length; i++) {
+                            byte c = result[i];
+                            bytes2[6 + i] = c;
+                        }
+
+                        m_peer.addMessageToSend(bytes2);
+
+                        m_peer.send();
                     }
+
+                    m_deliver.deliver(this, bytes);
 
                     m_key.interestOps(SelectionKey.OP_READ);
             }

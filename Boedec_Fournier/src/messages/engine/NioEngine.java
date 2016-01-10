@@ -83,7 +83,7 @@ public class NioEngine extends Engine {
 
                         Peer peer = (Peer) key.attachment();
                         SelectionKey sk = register(channel, peer, SelectionKey.OP_READ);
-                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa); // On crée un NIO channel associé au channel de connexion
+                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer); // On crée un NIO channel associé au channel de connexion
 
                         peer.accepted(null, nio_channel);
 
@@ -116,7 +116,7 @@ public class NioEngine extends Engine {
 
                         Peer peer = (Peer) key.attachment();
 
-                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa);
+                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
                         peer.connected(nio_channel);
 
                         key.interestOps(SelectionKey.OP_READ);

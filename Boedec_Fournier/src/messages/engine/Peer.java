@@ -5,13 +5,20 @@
  */
 package messages.engine;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import sun.java2d.pipe.hw.AccelDeviceEventListener;
 
 /**
@@ -27,7 +34,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      * Les messages reçus mais non délivrés sont représentés par une clé qui est
      * le timestamp
      */
-    private TreeMap<Byte, Message> m_messages;
+    private TreeSet<Message> m_messages;
 
     private byte m_timestamp;
 
@@ -40,7 +47,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     public Peer(NioEngine engine) {
         this.m_channels = new HashMap<>();
-        this.m_messages = new TreeMap<>();
+        this.m_messages = new TreeSet<>();
         this.m_timestamp = 0;
         this.m_message_to_send = new LinkedList<>();
         this.m_engine = engine;
@@ -89,23 +96,40 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     @Override
     public void deliver(Channel channel, byte[] bytes) {
-        Message message = new Message(channel.getRemoteAddress(), 0, bytes);
+        Message message = new Message(channel.getRemoteAddress(), bytes);
         Message final_message = null;
 
         byte type_message = message.getType();
-        byte timestamp_message = message.getM_timestamp();
-        byte timestamp_ack = bytes[2];
+
         /**
          * Si c'est de la data
          */
         if (type_message == 0) {
-            this.m_messages.put(bytes[0], message);
-            final_message = this.getMessage(timestamp_message);
-        } else if (this.m_messages.containsKey(timestamp_ack)) {
-            final_message = this.getMessage(timestamp_ack);
-            final_message.increaseNumAck();
+            this.m_messages.add(message);
+            final_message = getMessage(message);
         } else {
-            // Never happens if it works well
+            byte timestamp_ack = bytes[2];
+
+            byte[] ipAddr = new byte[]{bytes[3], bytes[4], bytes[5], bytes[6]};
+            InetAddress addr = null;
+            try {
+                addr = InetAddress.getByAddress(ipAddr);
+            } catch (UnknownHostException ex) {
+                Logger.getLogger(Peer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+
+            byte[] bytesInt = {bytes[7], bytes[8], bytes[9], bytes[10]};
+            int port = ByteBuffer.wrap(bytesInt).getInt();
+            InetSocketAddress isa = new InetSocketAddress(addr, port);
+
+            Message message_to_compare = new Message(isa, bytes);
+
+            synchronized (this.m_messages) {
+                if (this.m_messages.contains(message_to_compare)) {
+                    final_message = this.getMessage(message_to_compare);
+                    final_message.increaseNumAck();
+                }
+            }
         }
 
         /**
@@ -149,8 +173,10 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         for (Channel channel : channels) {
             channel.send(finalBytes, 0, finalBytes.length);
         }
-        
-        if(type_message_sent == 0) m_timestamp++;
+
+        if (type_message_sent == 0) {
+            m_timestamp++;
+        }
     }
 
     /**
@@ -164,9 +190,18 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         this.m_message_to_send.addLast(bytes);
     }
 
-    public Message getMessage(byte timestamp) {
-        Message message = this.m_messages.get(timestamp);
-        return message;
+    public Message getMessage(Message msg) {
+        Message result = null;
+        synchronized (this.m_messages) {
+            ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
+            int index = listeMessages.indexOf(msg);
+            try {
+                result = listeMessages.get(index);
+            } catch (ArrayIndexOutOfBoundsException ex) {
+                System.out.println("Here");
+            }
+        }
+        return result;
     }
 
 }
