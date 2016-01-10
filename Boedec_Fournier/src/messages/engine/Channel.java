@@ -9,12 +9,14 @@ import java.nio.channels.SocketChannel;
  * messages, stored in ByteBuffers.
  */
 public abstract class Channel {
-    
+
     SocketChannel m_ch;
     DeliverCallback m_deliver;
     InetSocketAddress m_remoteAddress;
 
     ByteBuffer m_buf_read, m_buf_write;
+
+    int m_translation_port;
 
     /**
      * Set the callback to deliver messages to.
@@ -39,11 +41,11 @@ public abstract class Channel {
      * @param length
      */
     public abstract void send(byte[] bytes, int offset, int length);
-    
+
     public abstract void sending();
 
     public abstract void close();
-    
+
     public abstract void read();
 
 }

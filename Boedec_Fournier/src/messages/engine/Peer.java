@@ -40,7 +40,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 
     private LinkedList<byte[]> m_message_to_send;
 
-    private NioEngine m_engine;
+    NioEngine m_engine;
 
     /**
      * Constructor
@@ -96,10 +96,17 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     @Override
     public void deliver(Channel channel, byte[] bytes) {
-        Message message = new Message(channel.getRemoteAddress(), bytes);
+        InetSocketAddress isa2 = new InetSocketAddress(channel.getRemoteAddress().getAddress(), channel.m_translation_port);
+        Message message = new Message(isa2, bytes);
         Message final_message = null;
 
         byte type_message = message.getType();
+
+        byte time_stamp_message = bytes[0];
+        if (time_stamp_message > this.m_timestamp) {
+            this.m_timestamp = time_stamp_message;
+        }
+        this.m_timestamp++;
 
         /**
          * Si c'est de la data
@@ -132,24 +139,25 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             }
         }
 
-        /**
-         * final_message est forcément initialisé en arrivant ici
-         */
-        if (final_message != null && final_message.isReadyToDeliver(this.getNbPeers())) {
-            byte[] byte_to_deliver = final_message.getM_content();
-            for (int i = 0; i < byte_to_deliver.length; i++) {
-                System.out.print("\t" + byte_to_deliver[i]);
-            }
-            System.out.println();
-            System.out.flush();
-        }
-//        System.out.print("On reçoit : ");
-//        for (int i = 0; i < bytes.length; i++) {
-//            System.out.print("\t" + bytes[i]);
+//        ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
+//        int indice = 0;
+//        while (indice < listeMessages.size()) {
+//            Message msg_to_monitor = listeMessages.get(indice);
+//            if (msg_to_monitor.isReadyToDeliver(this.getNbPeers())) {
+//                byte[] byte_to_deliver = msg_to_monitor.getM_content();
+//                for (int i = 0; i < byte_to_deliver.length; i++) {
+//                    System.out.print("\t" + byte_to_deliver[i]);
+//                }
+//                System.out.println();
+//                System.out.flush();
+//
+//                m_messages.remove(msg_to_monitor);
+//                indice++;
+//
+//            } else {
+//                break;
+//            }
 //        }
-//        System.out.println();
-//        System.out.flush();
-
     }
 
     void read(InetSocketAddress isa) {

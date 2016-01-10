@@ -43,7 +43,7 @@ public class NioChannel extends Channel {
      * @param deliver
      * @param remoteAddress
      */
-    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer) {
+    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer, int translation_port) {
         this.m_ch = m_ch;
         this.m_deliver = deliver;
 //        this.m_remoteAddress = m_ch.socket().get;
@@ -56,6 +56,12 @@ public class NioChannel extends Channel {
         m_remoteAddress = isa;
 
         m_peer = peer;
+
+        if (translation_port != -1) {
+            m_translation_port = translation_port;
+        } else {
+            m_translation_port = isa.getPort();
+        }
     }
 
     @Override
@@ -95,7 +101,10 @@ public class NioChannel extends Channel {
          * Si c'est de la data qui a été envoyé alors on envoie aussi un ack
          */
         if (type_message_sent == 0) {
-            System.out.println("ACK LOCAL_MESSAGE");
+//            System.out.println("ACK LOCAL_MESSAGE");
+
+            m_deliver.deliver(this, bytes);
+
             byte bytes2[] = new byte[11];
             bytes2[2] = timestamp_message_sent;
             timestamp_message_sent++;
@@ -106,7 +115,7 @@ public class NioChannel extends Channel {
             int port = 0;
             try {
                 ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
-                port = ((InetSocketAddress) this.m_ch.getLocalAddress()).getPort();
+                port = this.m_peer.m_engine.m_port_listening;
             } catch (IOException ex) {
                 Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -124,9 +133,6 @@ public class NioChannel extends Channel {
             }
 
             this.send(bytes2, 0, bytes2.length);
-        } else {
-            System.out.println("ACK SENT");
-
         }
 
         m_state_write = CONNECTED;
@@ -178,6 +184,12 @@ public class NioChannel extends Channel {
                         assert (m_seqno++ == bytes[i]);
                     }
 
+                    for (int i = 0; i < bytes.length; i++) {
+                        System.out.print("\t" + bytes[i]);
+                    }
+                    System.out.println();
+                    System.out.flush();
+
 //                    System.out.println("MESSAGE RECEIVED");
                     /**
                      * Si c'était de la data alors on envoie un ACK [timestamp |
@@ -186,7 +198,7 @@ public class NioChannel extends Channel {
                     byte type_message_received = bytes[1];
                     byte timestamp_message_received = bytes[0];
                     if (type_message_received == 0) {
-                        System.out.println("ACK REMOTE_MESSAGE");
+//                        System.out.println("ACK REMOTE_MESSAGE");
 
                         byte bytes2[] = new byte[10];
                         bytes2[1] = timestamp_message_received;
@@ -198,7 +210,7 @@ public class NioChannel extends Channel {
                             bytes2[2 + i] = tabIa[i];
                         }
 
-                        int port = this.m_remoteAddress.getPort();
+                        int port = m_translation_port;
 
                         ByteBuffer b = ByteBuffer.allocate(4);
                         b.putInt(port);
@@ -211,6 +223,7 @@ public class NioChannel extends Channel {
                         m_peer.addMessageToSend(bytes2);
 
                         m_peer.send();
+//                        System.out.println("remote ACK envoyé");
                     }
 
                     m_deliver.deliver(this, bytes);

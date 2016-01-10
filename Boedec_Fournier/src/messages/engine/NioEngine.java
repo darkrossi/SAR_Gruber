@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
@@ -18,6 +19,8 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -78,12 +81,20 @@ public class NioEngine extends Engine {
                         SocketChannel channel = channel_server.accept(); // On crée un channel avec celui qui arrive
                         channel.configureBlocking(false);
                         channel.socket().setTcpNoDelay(true);
+                        
+                        Thread.sleep(500);
+                        
+                        ByteBuffer buff = ByteBuffer.allocate(4);
+                        channel.read(buff);
+                        buff.position(0);
 
+//                        System.out.println("Port lu : " + buff.getInt());
+                        
                         InetSocketAddress isa = (InetSocketAddress) channel.getRemoteAddress();
 
                         Peer peer = (Peer) key.attachment();
                         SelectionKey sk = register(channel, peer, SelectionKey.OP_READ);
-                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer); // On crée un NIO channel associé au channel de connexion
+                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer, buff.getInt()); // On crée un NIO channel associé au channel de connexion
 
                         peer.accepted(null, nio_channel);
 
@@ -112,11 +123,17 @@ public class NioEngine extends Engine {
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
                         ch.finishConnect();
+                        
+                        ByteBuffer b = ByteBuffer.allocate(4);
+                        b.putInt(m_port_listening);
+                        b.position(0);
+                        ch.write(b);
+                        
                         InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
 
                         Peer peer = (Peer) key.attachment();
 
-                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
+                        NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer, -1);
                         peer.connected(nio_channel);
 
                         key.interestOps(SelectionKey.OP_READ);
@@ -133,6 +150,8 @@ public class NioEngine extends Engine {
             System.err.println("NioEngine got an exeption: " + ex.getMessage());
             ex.printStackTrace(System.err);
             System.exit(-1);
+        } catch (InterruptedException ex) {
+            Logger.getLogger(NioEngine.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
