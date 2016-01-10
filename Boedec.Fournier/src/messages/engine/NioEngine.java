@@ -27,15 +27,12 @@ import java.util.logging.Logger;
  */
 public class NioEngine extends Engine {
 
-    private Selector m_selector;
-
-    InetAddress m_localhost = InetAddress.getByName("localhost");
+    private Selector m_selector; // Le Selector qui va être créé dans le constructeur de classe pour manager les channels
     ServerSocketChannel m_sch; // Channel d'écoute de connexion
-    int m_port_listening;
-
-    Server m_s;
+    int m_port_listening; // The port d'écoute
 
     boolean thread_launched = false;
+    InetAddress m_localhost = InetAddress.getByName("localhost");
 
     /**
      * Constructor
@@ -50,6 +47,7 @@ public class NioEngine extends Engine {
      * Allows to register a selectable channel with the NIO selector.
      *
      * @param ch
+     * @param callbacks
      * @param interests
      * @return
      * @throws ClosedChannelException
@@ -61,11 +59,14 @@ public class NioEngine extends Engine {
         return key;
     }
 
+    /**
+     * Cette boucle infinie permet de gérer les SelectionKey du Selector
+     */
     @Override
     public void mainloop() {
-        long delay = 0;
+
         try {
-            // On capture le thread principal dans une boucle infinie
+            long delay = 0;
             for (;;) {
                 getM_selector().select(delay);
                 Iterator<?> selectedKeys = this.getM_selector().selectedKeys().iterator();
@@ -75,21 +76,32 @@ public class NioEngine extends Engine {
                     if (!key.isValid()) {
                         continue;
                     } else if (key.isAcceptable()) {
-                        ServerSocketChannel channel_server = (ServerSocketChannel) key.channel(); // On récupère son socket de connexion
+                        /**
+                         * Si on accepte une connexion alors on crée un
+                         * SocketChannel associé, on l'enregistre dans le
+                         * Selector et on appelle le deliver
+                         */
+                        ServerSocketChannel channel_server = (ServerSocketChannel) key.channel();
 
+                        // Création de la SocketChannel
                         SocketChannel channel = channel_server.accept(); // On crée un channel avec celui qui arrive
                         channel.configureBlocking(false);
                         channel.socket().setTcpNoDelay(true);
 
-//                        System.out.println("Port lu : " + buff.getInt());
-                        InetSocketAddress isa = (InetSocketAddress) channel.getRemoteAddress();
-
+                        // On enregistre ce SocketChannel dans le Selector
                         Peer peer = (Peer) key.attachment();
                         SelectionKey sk = register(channel, peer, SelectionKey.OP_READ);
-                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer); // On crée un NIO channel associé au channel de connexion
 
+                        // On crée un Channel associé à la connexion et on fait appel au Deliver
+                        InetSocketAddress isa = (InetSocketAddress) channel.getRemoteAddress();
+                        NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer);
                         peer.accepted(null, nio_channel);
 
+                        /**
+                         * Si c'est la première connexion avec quelqu'un d'autre
+                         * alors on lance le thread qui va envoyer des messages
+                         * périodiquement
+                         */
                         if (!thread_launched) {
                             BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
                             broadcast_thread.start();
@@ -97,46 +109,75 @@ public class NioEngine extends Engine {
                         }
 
                     } else if (key.isReadable()) {
-                        // a channel is ready for reading
+                        /**
+                         * Si le channel est prêt à lire du contenu alors on
+                         * appelle le Peer pour qu'il prenne le relais
+                         */
                         SocketChannel m_ch = (SocketChannel) key.channel();
                         InetSocketAddress isa = (InetSocketAddress) m_ch.getRemoteAddress();
 
+                        // Le Peer prend le relais
                         Peer peer = (Peer) key.attachment();
                         boolean isOk = peer.read(isa);
+
+                        /**
+                         * Si jamais il y a un problème de connexion alors on
+                         * supprime le channel
+                         */
                         if (!isOk) {
                             m_selector.selectedKeys().remove(key);
                         }
 
                     } else if (key.isWritable()) {
-                        // a channel is ready for writing
+                        /**
+                         * Si le channel est prêt à écrire du contenu alors on
+                         * appelle le Peer pour qu'il prenne le relais
+                         */
 
+                        // Le Peer prend le relais
                         Peer peer = (Peer) key.attachment();
                         synchronized (System.out) {
                             peer.send();
                         }
 
                     } else if (key.isConnectable()) {
+                        /**
+                         * Si on se connecte à un peer alors on crée un
+                         * SocketChannel et on appelle le Peer pour qu'il prenne
+                         * le relais
+                         */
+
+                        // On crée le SocketChannel
                         SocketChannel ch = (SocketChannel) key.channel();
                         ch.configureBlocking(false);
                         ch.socket().setTcpNoDelay(true);
                         try {
                             ch.finishConnect();
-                            InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
 
+                            // On appelle le Peer qui prend le relais
                             Peer peer = (Peer) key.attachment();
-
+                            InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
                             NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
                             peer.connected(nio_channel);
 
+                            // On set le statut de la SelectionKey
                             key.interestOps(SelectionKey.OP_READ);
 
+                            /**
+                             * Si c'est la première connexion avec quelqu'un
+                             * d'autre alors on lance le thread qui va envoyer
+                             * des messages périodiquement
+                             */
                             if (!thread_launched) {
                                 BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
                                 broadcast_thread.start();
                                 thread_launched = true;
                             }
                         } catch (ConnectException ex) {
-
+                            /**
+                             * Si jamais il y a un problème de connexion alors
+                             * on supprime le channel
+                             */
                         }
                     }
                 }
@@ -148,46 +189,55 @@ public class NioEngine extends Engine {
         }
     }
 
+    /**
+     * Crée une socket d'écoute
+     *
+     * @param port
+     * @param callback
+     * @return
+     * @throws IOException
+     */
     @Override
     public Server listen(int port, AcceptCallback callback) throws IOException {
 
         m_port_listening = port;
 
-//        m_state = ACCEPTING;
-        // create a new non-blocking server socket channel
+        /**
+         * On crée une socket d'écoute
+         */
         m_sch = ServerSocketChannel.open();
         m_sch.configureBlocking(false);
-        // bind the server socket to the specified address and port
         InetSocketAddress isa = new InetSocketAddress(m_localhost, m_port_listening);
         m_sch.socket().bind(isa);
 
+        // On enregistre cette Socket dans le Selector
         register(m_sch, callback, SelectionKey.OP_ACCEPT);
 
         NioServer nio_server = new NioServer(m_port_listening);
-        m_s = nio_server;
         return nio_server;
     }
 
+    /**
+     *
+     * @param hostAddress
+     * @param port
+     * @param callback
+     * @throws UnknownHostException
+     * @throws SecurityException
+     * @throws ClosedChannelException
+     * @throws IOException
+     */
     @Override
     public void connect(InetAddress hostAddress, int port, ConnectCallback callback) throws UnknownHostException, SecurityException, ClosedChannelException, IOException {
-        // create a non-blocking socket channel
-//        assert (getM_state() == DISCONNECTED);
-//        m_state = CONNECTING;
-
+        /**
+         * On tente de se connecter sur un peer à l'adresse hostAddress:port
+         */
         SocketChannel m_ch = SocketChannel.open();
         m_ch.configureBlocking(false);
         m_ch.socket().setTcpNoDelay(true);
+        m_ch.connect(new InetSocketAddress(hostAddress, port));
 
-        // request to connect to the server
-        try {
-            m_ch.connect(new InetSocketAddress(hostAddress, port));
-        } catch (SecurityException ex) {
-            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (ConnectException ex) {
-            System.out.println("Impossible de se connecter");
-            return;
-        }
-        // be notified when the connection to the server will be accepted
+        // On enregistre le SocketChannel associé dans le Selector
         register(m_ch, callback, SelectionKey.OP_CONNECT);
 
     }
@@ -198,12 +248,4 @@ public class NioEngine extends Engine {
     public Selector getM_selector() {
         return m_selector;
     }
-
-    /**
-     * @param m_selector the m_selector to set
-     */
-    public void setM_selector(Selector m_selector) {
-        this.m_selector = m_selector;
-    }
-
 }

@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.TreeSet;
 
 /**
@@ -22,21 +21,19 @@ import java.util.TreeSet;
 public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 
     private HashMap<InetSocketAddress, Channel> m_channels;
-
     /**
-     * Les messages reçus mais non délivrés sont représentés par une clé qui est
-     * le timestamp
+     * Les messages reçus mais non délivrés
      */
     private TreeSet<Message> m_messages;
-
-    private int m_timestamp;
-
     private LinkedList<byte[]> m_message_to_send;
 
     NioEngine m_engine;
+    private int m_timestamp;
 
     /**
-     * Constructor
+     * Constructeur
+     *
+     * @param engine
      */
     public Peer(NioEngine engine) {
         this.m_channels = new HashMap<>();
@@ -44,9 +41,6 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         this.m_timestamp = 0;
         this.m_message_to_send = new LinkedList<>();
         this.m_engine = engine;
-
-//        MonitorMessagesToSend thread = new MonitorMessagesToSend(this, m_engine);
-//        thread.start();
     }
 
     /**
@@ -66,9 +60,14 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         return this.getM_channels().size();
     }
 
+    /**
+     * Ajoute un Channel à la liste
+     *
+     * @param server
+     * @param channel
+     */
     @Override
     public void accepted(Server server, Channel channel) {
-        System.out.println("Je viens d'accepter.");
         this.getM_channels().put(channel.getRemoteAddress(), channel);
     }
 
@@ -77,9 +76,13 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
+    /**
+     * Ajoute un Channel à la liste
+     *
+     * @param channel
+     */
     @Override
     public void connected(Channel channel) {
-        System.out.println("Je viens de me connecter.");
         this.getM_channels().put(channel.getRemoteAddress(), channel);
 
     }
@@ -138,10 +141,17 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             }
         }
 
+        /**
+         * On parcours les messages reçus en commençant par le premier pour voir
+         * si on peut le délivrer
+         */
         ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
         int indice = 0;
         while (indice < listeMessages.size()) {
             Message msg_to_monitor = listeMessages.get(indice);
+            /**
+             * Peut-on délivrer msg_to_monitor ?
+             */
             if (msg_to_monitor.isReadyToDeliver(this.getNbPeers())) {
                 byte[] byte_to_deliver = msg_to_monitor.getM_content();
                 System.out.print("DELIVERED : \t");
@@ -155,13 +165,20 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
                 indice++;
 
             } else {
+                /**
+                 * Si on n'a pas pu le délivrer alors on arrête
+                 */
                 break;
             }
         }
-
-//        this.m_engine.getM_selector().wakeup();
     }
 
+    /**
+     * Permet d'appeller un Channel qui va lire du contenu
+     *
+     * @param isa
+     * @return
+     */
     boolean read(InetSocketAddress isa) {
         Channel channel = this.getM_channels().get(isa);
         if (channel == null) {
@@ -173,15 +190,13 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 
     }
 
+    /**
+     * Permet de construire le message avec le timestamp et l'id afin qu'il soit
+     * envoyé
+     */
     void send() {
         if (!this.m_message_to_send.isEmpty()) {
-            byte[] msg_to_send = null;
-            msg_to_send = this.m_message_to_send.removeFirst();
-
-            /**
-             * msg_to_send est de type [type (1) | data ()]
-             */
-            byte type_message_sent = msg_to_send[0];
+            byte[] msg_to_send = this.m_message_to_send.removeFirst();
 
             /**
              * On rajoute 8 cases pour le timestamp et l'id
@@ -223,10 +238,22 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         return m_channels;
     }
 
+    /**
+     * Ajoute un message à envoyer dans la liste
+     *
+     * @param bytes
+     */
     public void addMessageToSend(byte[] bytes) {
         this.m_message_to_send.addLast(bytes);
     }
 
+    /**
+     * Permet de récupérer dans la liste le message dans le timestamp, l'IP et
+     * le port correspondent à celui de msg
+     *
+     * @param msg
+     * @return
+     */
     public Message getMessage(Message msg) {
         Message result = null;
         synchronized (this.m_messages) {
@@ -238,6 +265,11 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         return result;
     }
 
+    /**
+     * Supprime un Channel de la liste
+     *
+     * @param aThis
+     */
     void imDead(NioChannel aThis) {
         m_channels.remove(aThis.getRemoteAddress());
     }

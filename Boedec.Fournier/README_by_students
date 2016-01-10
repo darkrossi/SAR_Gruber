@@ -5,7 +5,8 @@ HOW TO LAUNCH THE PROJECT :
 HOW TO RUN TEST (3 peers) :
   - Run the project 3 times (i.e. in 3 different consoles).
   - In each console type the number of ports in this order : 2005, 2006, 2007.
-  - As soon as a peer is connected with other peer(s) it sends 3 numbers ([0,1,2] for 2005, [8,9,10] for 2006 and [16,17,18] for 2007) in an forever loop.
+  - As soon as a peer is connected with other peer(s) it sends 3 numbers ([8,9,10] for 2005, [16,17,18] for 2006 and [24,25,26] for 2007) in an forever loop.
+  - Each delivered messages are displayed in the console.
 
 OVERVIEW OF THE MAIN JAVA CLASSES :
   - Main :
@@ -15,6 +16,20 @@ OVERVIEW OF THE MAIN JAVA CLASSES :
     - Launches the "connect" method of the NioEnfine object on the other connected peers
     - Launches the mainloop of the NioEngine object
 
+
+  - NioChannel
+    - This class wraps a channelSocket created for a connection with someone else
+    - sending() : says it is ready to send to its linked SelectionKey
+    - send(message) : sends the message to the remote peer (then send also a ACK when the sent message is a DATA message and not an ACK message)
+    - read() : reads a message sent by the remote peer and then sends an ACK message
+
+
+  - Peer
+    - This is the element that gathers the received messages (which wait for their delivrance), the messages to send and a list of the Channel that represents the connexion with other peers.
+    - It implements the different callbacks (DeliverCallback, ConnectCallback, AcceptCallback)
+    - It owns a timestamp that is sent with their messages
+    - This is the element that is called by the Engine when events happens (sending, receive a message, receive a connection, accept a connection)
+
+
   - NioEngine :
-    - Connects with someone else and listens to any connection.
-    - Forever loops a Selector object to manage the connections, deliverings, ...
+    - This is the element that monitors the keys of the selector. It calls the associated Peer for it to decide what to do next.

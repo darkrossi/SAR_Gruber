@@ -22,38 +22,33 @@ public class NioChannel extends Channel {
 
     int m_state_read, m_state_write;
     SelectionKey m_key;
+    private Peer m_peer;
 
     byte m_seqno;
 
-    private static final int DISCONNECTED = 0;
-    private static final int ACCEPTING = 1;
     private static final int READING_LENGTH = 2;
     private static final int READING_BYTES = 3;
-    private static final int CONNECTING = 4;
     private static final int CONNECTED = 5;
     private static final int SENDING = 6;
 
-    private Peer m_peer;
-
     /**
-     * Constructor
+     * Constructeur
      *
      * @param m_ch
      * @param deliver
-     * @param remoteAddress
+     * @param key
+     * @param isa
+     * @param peer
      */
     public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer) {
         this.m_ch = m_ch;
         this.m_deliver = deliver;
-//        this.m_remoteAddress = m_ch.socket().get;
         this.m_key = key;
         m_key.interestOps(SelectionKey.OP_READ);
         m_state_read = READING_LENGTH;
         m_buf_read = ByteBuffer.allocate(4);
         m_state_write = CONNECTED;
-
         m_remoteAddress = isa;
-
         m_peer = peer;
 
     }
@@ -68,6 +63,13 @@ public class NioChannel extends Channel {
         return this.m_remoteAddress;
     }
 
+    /**
+     * On envoie un tableau de bytes au remote peer
+     *
+     * @param bytes
+     * @param offset
+     * @param length
+     */
     @Override
     public void send(byte[] bytes, int offset, int length) {
         assert (m_state_write == CONNECTED);
@@ -130,6 +132,10 @@ public class NioChannel extends Channel {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
+    /**
+     * Permet de lire un tableau de bytes entrant : d'abord la longeur puis le
+     * contenu
+     */
     @Override
     public void read() {
         try {
@@ -213,6 +219,9 @@ public class NioChannel extends Channel {
         }
     }
 
+    /**
+     * Set le statut de la SelectionKey associée
+     */
     @Override
     public void sending() {
         m_key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);

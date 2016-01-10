@@ -10,7 +10,7 @@ import java.util.Scanner;
 
 public class Main {
 
-    static final int num_min_port = 2005; // Représente le premier port à renseigner pour les tests
+    static final int MIN_PORT = 2005; // Représente le premier port à renseigner pour les tests
 
     public static void main(String args[]) throws Exception {
         /**
@@ -32,7 +32,7 @@ public class Main {
          * On se connecte avec les autres peers présents
          */
         InetAddress m_localhost = InetAddress.getByName("localhost");
-        for (int i = 0; i < m_port_listening - num_min_port; i++) {
+        for (int i = 0; i < m_port_listening - MIN_PORT; i++) {
             engine.connect(m_localhost, 2005 + i, peer);
         }
 
