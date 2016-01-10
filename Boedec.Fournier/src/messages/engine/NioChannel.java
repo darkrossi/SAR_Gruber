@@ -104,8 +104,7 @@ public class NioChannel extends Channel {
 
             byte bytes2[] = new byte[13];
             bytes2[0] = 1;
-            System.arraycopy(bytes, 1, bytes2, 0, 4); // On copie l'IP
-
+            System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
             System.arraycopy(bytes, 4, bytes2, 9, 4); // On copie le port à la fin
 
             InetAddress ia = null;

@@ -92,7 +92,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     @Override
     public void deliver(Channel channel, byte[] bytes) {
-        byte type_message = bytes[5];
+        byte type_message = bytes[8];
 
         /**
          * On a un message [timestamp (4) | id (4) | type (1) | data (?)] ou
@@ -123,9 +123,6 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             this.m_timestamp = time_stamp_message;
         }
         this.m_timestamp++;  // on a reçu un ACK ou un message de data
-
-        InetSocketAddress isa = null;
-        Message message_to_compare = null;
 
         /**
          * Si c'est de la data
