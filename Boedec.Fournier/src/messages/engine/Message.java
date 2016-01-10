@@ -18,7 +18,7 @@ public class Message implements Comparable<Message> {
     private InetSocketAddress m_remote_adress;
     private byte m_type;
     private byte[] m_content;
-    private byte m_timestamp;
+    private int m_timestamp;
     private int m_num_ack;
     private int m_id;
 
@@ -33,17 +33,22 @@ public class Message implements Comparable<Message> {
     public Message(InetSocketAddress m_remote_adress, byte[] bytes) {
         this.m_remote_adress = m_remote_adress;
         this.m_content = bytes;
-//        this.m_content = new byte[bytes.length - 1];
-//        System.arraycopy(bytes, 1, this.m_content, 0, this.m_content.length);
-        this.m_type = bytes[5];
-        if (this.m_type == 0) {
-            this.m_timestamp = bytes[0];
-        } else {
-            this.m_timestamp = bytes[6];
+        /**
+         * bytes de la forme [timestamp (4) | id (4) | type (1) | data (?)] si
+         * data et [timestamp (4) | id (4) | type (1) | timestamp_ack (4) | IP
+         * (4) | port (4)] si ACK
+         */
+        this.m_type = bytes[8];
+        int indice_timestamp = 0;
+        if (this.m_type == 1) {
+            indice_timestamp = 9;
         }
-
         byte[] id_tab = new byte[4];
-        System.arraycopy(bytes, 1, id_tab, 0, 4);
+        System.arraycopy(bytes, indice_timestamp, id_tab, 0, 4);
+        this.m_timestamp = ByteBuffer.wrap(id_tab).getInt();
+
+        id_tab = new byte[4];
+        System.arraycopy(bytes, 4, id_tab, 0, 4);
         m_id = ByteBuffer.wrap(id_tab).getInt();
 
         this.m_num_ack = 0;
@@ -97,7 +102,7 @@ public class Message implements Comparable<Message> {
     /**
      * @return the m_timestamp
      */
-    public byte getM_timestamp() {
+    public int getM_timestamp() {
         return m_timestamp;
     }
 
@@ -143,24 +148,5 @@ public class Message implements Comparable<Message> {
 
         }
     }
-//
-//    public class MyInetSOcketAdress implements Comparable<MyInetSOcketAdress> {
-//
-//        private InetSocketAddress isa;
-//
-//        public MyInetSOcketAdress(InetSocketAddress isa) {
-//            this.isa = isa;
-//        }
-//
-//        @Override
-//        public int compareTo(MyInetSOcketAdress o) {
-//            InetAddress m_ia = this.isa.getAddress();
-//            InetAddress ia = o.isa.getAddress();
-//            if(m_ia.getAddress() > ia.getAddress()){
-//                
-//            }
-//        }
-//
-//    }
 
 }

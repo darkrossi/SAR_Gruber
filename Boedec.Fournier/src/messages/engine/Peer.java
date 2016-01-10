@@ -29,7 +29,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     private TreeSet<Message> m_messages;
 
-    private byte m_timestamp;
+    private int m_timestamp;
 
     private LinkedList<byte[]> m_message_to_send;
 
@@ -94,16 +94,19 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     public void deliver(Channel channel, byte[] bytes) {
         byte type_message = bytes[5];
 
+        /**
+         * On a un message [timestamp (4) | id (4) | type (1) | data (?)] ou
+         * [timestamp (4) | id (4) | type (1) | timestamp_ack (4) | IP (4) |
+         * port (4)]
+         */
         int port = 0;
-        if (type_message == 0) {
-            byte[] id_tab = new byte[4];
-            System.arraycopy(bytes, 1, id_tab, 0, 4);
-            port = ByteBuffer.wrap(id_tab).getInt();
-        } else {
-            byte[] id_tab = new byte[4];
-            System.arraycopy(bytes, 11, id_tab, 0, 4);
-            port = ByteBuffer.wrap(id_tab).getInt();
+        int indice_port = 4;
+        if (type_message == 1) {
+            indice_port = 17;
         }
+        byte[] id_tab = new byte[4];
+        System.arraycopy(bytes, indice_port, id_tab, 0, 4);
+        port = ByteBuffer.wrap(id_tab).getInt();
 
         /**
          * Normalement l'InetAdress devrait être prise des bytes d'IP si ACK
@@ -170,23 +173,34 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     void send() {
         if (!this.m_message_to_send.isEmpty()) {
             byte[] msg_to_send = null;
-            try {
-                msg_to_send = this.m_message_to_send.removeFirst();
-            } catch (NoSuchElementException ex) {
-                System.out.println(ex);
-            }
+            msg_to_send = this.m_message_to_send.removeFirst();
+
+            /**
+             * msg_to_send est de type [type (1) | data ()]
+             */
             byte type_message_sent = msg_to_send[0];
 
             /**
-             * On rajoute 5 cases pour le timestamp et l'id
+             * On rajoute 8 cases pour le timestamp et l'id
              */
-            byte finalBytes[] = new byte[msg_to_send.length + 5];
-            finalBytes[0] = m_timestamp;
+            byte finalBytes[] = new byte[msg_to_send.length + 8];
+
+            /**
+             * Ajout du timestamp
+             */
             ByteBuffer b = ByteBuffer.allocate(4);
-            b.putInt(this.m_engine.m_port_listening);
+            b.putInt(this.m_timestamp);
             byte[] result = b.array();
-            System.arraycopy(result, 0, finalBytes, 1, result.length);
-            System.arraycopy(msg_to_send, 0, finalBytes, 5, msg_to_send.length);
+            System.arraycopy(result, 0, finalBytes, 0, result.length);
+
+            /**
+             * Ajout de l'id
+             */
+            b = ByteBuffer.allocate(4);
+            b.putInt(this.m_engine.m_port_listening);
+            result = b.array();
+            System.arraycopy(result, 0, finalBytes, 4, result.length);
+            System.arraycopy(msg_to_send, 0, finalBytes, 8, msg_to_send.length);
 
             /**
              * On a créé un message [timestamp | id | type | data]
@@ -218,7 +232,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             try {
                 result = listeMessages.get(index);
             } catch (ArrayIndexOutOfBoundsException ex) {
-                
+
             }
         }
         return result;

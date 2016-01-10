@@ -74,43 +74,39 @@ public class NioChannel extends Channel {
         m_state_write = SENDING;
 
         /**
-         * On a un message [timestamp | id | type | data] [1 | 4 | 1 | ?]
+         * On a un message [timestamp (4) | id (4) | type (1) | data (?)]
          */
-        byte timestamp_message_sent = bytes[0];
-        byte type_message_sent = bytes[5];
+        byte type_message_sent = bytes[8];
 
+        /**
+         * On ajout la taille du message en tête
+         */
         ByteBuffer m_buf = ByteBuffer.allocate(4 + bytes.length);
         m_buf.putInt(bytes.length);
         m_buf.put(bytes, 0, bytes.length);
         m_buf.position(0);
 
-        synchronized (System.out) {
-            System.out.print("SENT \t");
-        }
-        for (int i = 0; i < bytes.length; i++) {
-            System.out.print("\t" + bytes[i]);
-        }
-        System.out.println();
-        System.out.flush();
-
         try {
             m_ch.write(m_buf);
         } catch (IOException ex) {
             Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (StackOverflowError ex){
+            System.out.println("Here");
         }
 
         /**
          * Si c'est de la data qui a été envoyé alors on envoie aussi un ack de
-         * taille 10 (2 pour type | timestamp_ack et 8 pour IP | port)
+         * taille 13 [ type (1) | timestamp_ack (4) | IP (4) | port (4)]
          */
         if (type_message_sent == 0) {
 
             m_deliver.deliver(this, bytes);
 
-            byte bytes2[] = new byte[2 + 8];
-            bytes2[1] = timestamp_message_sent;
+            byte bytes2[] = new byte[13];
             bytes2[0] = 1;
-            System.arraycopy(bytes, 1, bytes2, 6, 4); // On copie le port à la fin
+            System.arraycopy(bytes, 1, bytes2, 0, 4); // On copie l'IP
+
+            System.arraycopy(bytes, 4, bytes2, 9, 4); // On copie le port à la fin
 
             InetAddress ia = null;
             try {
@@ -121,7 +117,7 @@ public class NioChannel extends Channel {
 
             byte[] tabIa = ia.getAddress();
             try {
-                System.arraycopy(tabIa, 0, bytes2, 2, 4); // On copie l'IP
+                System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
             } catch (ArrayIndexOutOfBoundsException ex) {
                 System.out.println("Here");
             }
@@ -179,39 +175,28 @@ public class NioChannel extends Channel {
                         assert (m_seqno++ == bytes[i]);
                     }
 
-                    synchronized (System.out) {
-                        System.out.print("RECEIVED");
-                    }
-                    for (int i = 0; i < bytes.length; i++) {
-                        System.out.print("\t" + bytes[i]);
-                    }
-                    System.out.println();
-                    System.out.flush();
-
+                    /**
+                     * On a reçu un message de la forme [timestamp (4) | id (4)
+                     * | type (1) | data (?)] si data et [timestamp (4) | id (4)
+                     * | type (1) | timestamp_ack (4) | IP (4) | port (4)] si
+                     * ACK
+                     */
                     m_deliver.deliver(this, bytes);
 
-//                    System.out.println("MESSAGE RECEIVED");
-                    byte timestamp_message_received = bytes[0];
-                    byte type_message_received = bytes[5];
-                    byte[] id_tab = new byte[4];
-                    try {
-                        System.arraycopy(bytes, 1, id_tab, 0, 4);
-                    } catch (ArrayIndexOutOfBoundsException ex) {
-                        System.out.println("Here");
-                    }
+                    byte type_message_received = bytes[8];
 
                     /**
                      * Si c'est de la data qui a été envoyé alors on envoie
-                     * aussi un ack de taille 10 (2 pour type | timestamp_ack et
-                     * 8 pour IP | port)
+                     * aussi un ack de taille 13 [ type (1) | timestamp_ack (4)
+                     * | IP (4) | port (4)]
                      */
                     if (type_message_received == 0) {
 //                        System.out.println("ACK REMOTE_MESSAGE");
 
-                        byte bytes2[] = new byte[2 + 8];
-                        bytes2[1] = timestamp_message_received;
+                        byte bytes2[] = new byte[13];
                         bytes2[0] = 1;
-                        System.arraycopy(id_tab, 0, bytes2, 6, 4); // On copie le port à la fin
+                        System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
+                        System.arraycopy(bytes, 4, bytes2, 9, 4); // On copie le port à la fin
 
                         InetAddress ia = null;
                         try {
@@ -222,7 +207,7 @@ public class NioChannel extends Channel {
 
                         byte[] tabIa = ia.getAddress();
                         try {
-                            System.arraycopy(tabIa, 0, bytes2, 2, 4); // On copie l'IP
+                            System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
                         } catch (ArrayIndexOutOfBoundsException ex) {
                             System.out.println("Here");
                         }
