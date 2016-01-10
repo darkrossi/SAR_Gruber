@@ -13,7 +13,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import sun.nio.ch.SelChImpl;
 
 /**
  *
@@ -43,7 +42,7 @@ public class NioChannel extends Channel {
      * @param deliver
      * @param remoteAddress
      */
-    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer, int translation_port) {
+    public NioChannel(SocketChannel m_ch, DeliverCallback deliver, SelectionKey key, InetSocketAddress isa, Peer peer) {
         this.m_ch = m_ch;
         this.m_deliver = deliver;
 //        this.m_remoteAddress = m_ch.socket().get;
@@ -57,11 +56,6 @@ public class NioChannel extends Channel {
 
         m_peer = peer;
 
-        if (translation_port != -1) {
-            m_translation_port = translation_port;
-        } else {
-            m_translation_port = isa.getPort();
-        }
     }
 
     @Override
@@ -80,59 +74,60 @@ public class NioChannel extends Channel {
         m_state_write = SENDING;
 
         /**
-         * On a un message [timestamp | type | data]
+         * On a un message [timestamp | id | type | data] [1 | 4 | 1 | ?]
          */
-        byte type_message_sent = bytes[1];
         byte timestamp_message_sent = bytes[0];
+        byte type_message_sent = bytes[5];
 
         ByteBuffer m_buf = ByteBuffer.allocate(4 + bytes.length);
         m_buf.putInt(bytes.length);
         m_buf.put(bytes, 0, bytes.length);
         m_buf.position(0);
 
+        synchronized (System.out) {
+            System.out.print("SENT \t");
+        }
+        for (int i = 0; i < bytes.length; i++) {
+            System.out.print("\t" + bytes[i]);
+        }
+        System.out.println();
+        System.out.flush();
+
         try {
-//            System.out.println("MESSAGE SENT");
             m_ch.write(m_buf);
         } catch (IOException ex) {
             Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
         }
 
         /**
-         * Si c'est de la data qui a été envoyé alors on envoie aussi un ack
+         * Si c'est de la data qui a été envoyé alors on envoie aussi un ack de
+         * taille 10 (2 pour type | timestamp_ack et 8 pour IP | port)
          */
         if (type_message_sent == 0) {
-//            System.out.println("ACK LOCAL_MESSAGE");
 
             m_deliver.deliver(this, bytes);
 
-            byte bytes2[] = new byte[11];
-            bytes2[2] = timestamp_message_sent;
-            timestamp_message_sent++;
-            bytes2[1] = 1;
-            bytes2[0] = timestamp_message_sent;
+            byte bytes2[] = new byte[2 + 8];
+            bytes2[1] = timestamp_message_sent;
+            bytes2[0] = 1;
+            System.arraycopy(bytes, 1, bytes2, 6, 4); // On copie le port à la fin
 
             InetAddress ia = null;
-            int port = 0;
             try {
                 ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
-                port = this.m_peer.m_engine.m_port_listening;
             } catch (IOException ex) {
                 Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
             }
+
             byte[] tabIa = ia.getAddress();
-            for (int i = 0; i < tabIa.length; i++) {
-                bytes2[3 + i] = tabIa[i];
+            try {
+                System.arraycopy(tabIa, 0, bytes2, 2, 4); // On copie l'IP
+            } catch (ArrayIndexOutOfBoundsException ex) {
+                System.out.println("Here");
             }
 
-            ByteBuffer b = ByteBuffer.allocate(4);
-            b.putInt(port);
-            byte[] result = b.array();
-            for (int i = 0; i < result.length; i++) {
-                byte c = result[i];
-                bytes2[7 + i] = c;
-            }
-
-            this.send(bytes2, 0, bytes2.length);
+            m_peer.addMessageToSend(bytes2);
+            m_peer.send();
         }
 
         m_state_write = CONNECTED;
@@ -184,49 +179,57 @@ public class NioChannel extends Channel {
                         assert (m_seqno++ == bytes[i]);
                     }
 
+                    synchronized (System.out) {
+                        System.out.print("RECEIVED");
+                    }
                     for (int i = 0; i < bytes.length; i++) {
                         System.out.print("\t" + bytes[i]);
                     }
                     System.out.println();
                     System.out.flush();
 
+                    m_deliver.deliver(this, bytes);
+
 //                    System.out.println("MESSAGE RECEIVED");
-                    /**
-                     * Si c'était de la data alors on envoie un ACK [timestamp |
-                     * type | timestamp_ack | address]
-                     */
-                    byte type_message_received = bytes[1];
                     byte timestamp_message_received = bytes[0];
+                    byte type_message_received = bytes[5];
+                    byte[] id_tab = new byte[4];
+                    try {
+                        System.arraycopy(bytes, 1, id_tab, 0, 4);
+                    } catch (ArrayIndexOutOfBoundsException ex) {
+                        System.out.println("Here");
+                    }
+
+                    /**
+                     * Si c'est de la data qui a été envoyé alors on envoie
+                     * aussi un ack de taille 10 (2 pour type | timestamp_ack et
+                     * 8 pour IP | port)
+                     */
                     if (type_message_received == 0) {
 //                        System.out.println("ACK REMOTE_MESSAGE");
 
-                        byte bytes2[] = new byte[10];
+                        byte bytes2[] = new byte[2 + 8];
                         bytes2[1] = timestamp_message_received;
                         bytes2[0] = 1;
+                        System.arraycopy(id_tab, 0, bytes2, 6, 4); // On copie le port à la fin
 
-                        InetAddress ia = this.m_remoteAddress.getAddress();
-                        byte[] tabIa = ia.getAddress();
-                        for (int i = 0; i < tabIa.length; i++) {
-                            bytes2[2 + i] = tabIa[i];
+                        InetAddress ia = null;
+                        try {
+                            ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
+                        } catch (IOException ex) {
+                            Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
                         }
 
-                        int port = m_translation_port;
-
-                        ByteBuffer b = ByteBuffer.allocate(4);
-                        b.putInt(port);
-                        byte[] result = b.array();
-                        for (int i = 0; i < result.length; i++) {
-                            byte c = result[i];
-                            bytes2[6 + i] = c;
+                        byte[] tabIa = ia.getAddress();
+                        try {
+                            System.arraycopy(tabIa, 0, bytes2, 2, 4); // On copie l'IP
+                        } catch (ArrayIndexOutOfBoundsException ex) {
+                            System.out.println("Here");
                         }
 
                         m_peer.addMessageToSend(bytes2);
-
                         m_peer.send();
-//                        System.out.println("remote ACK envoyé");
                     }
-
-                    m_deliver.deliver(this, bytes);
 
                     m_key.interestOps(SelectionKey.OP_READ);
             }

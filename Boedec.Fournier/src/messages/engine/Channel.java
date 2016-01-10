@@ -16,8 +16,6 @@ public abstract class Channel {
 
     ByteBuffer m_buf_read, m_buf_write;
 
-    int m_translation_port;
-
     /**
      * Set the callback to deliver messages to.
      *

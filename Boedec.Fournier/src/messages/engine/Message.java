@@ -5,10 +5,8 @@
  */
 package messages.engine;
 
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.Comparator;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
@@ -22,6 +20,7 @@ public class Message implements Comparable<Message> {
     private byte[] m_content;
     private byte m_timestamp;
     private int m_num_ack;
+    private int m_id;
 
     /**
      * Le contenu du paramètre bytes est de cette forme [timestamp | type |
@@ -36,12 +35,16 @@ public class Message implements Comparable<Message> {
         this.m_content = bytes;
 //        this.m_content = new byte[bytes.length - 1];
 //        System.arraycopy(bytes, 1, this.m_content, 0, this.m_content.length);
-        this.m_type = bytes[1];
+        this.m_type = bytes[5];
         if (this.m_type == 0) {
             this.m_timestamp = bytes[0];
         } else {
-            this.m_timestamp = bytes[2];
+            this.m_timestamp = bytes[6];
         }
+
+        byte[] id_tab = new byte[4];
+        System.arraycopy(bytes, 1, id_tab, 0, 4);
+        m_id = ByteBuffer.wrap(id_tab).getInt();
 
         this.m_num_ack = 0;
     }
@@ -65,7 +68,21 @@ public class Message implements Comparable<Message> {
             return false;
         }
         Message message = (Message) other;
-        return this.m_remote_adress.equals(message.m_remote_adress) && this.getM_timestamp() == message.getM_timestamp();
+
+        if (this.getM_timestamp() != message.getM_timestamp()) {
+            return false;
+        }
+
+        byte[] m_address = this.m_remote_adress.getAddress().getAddress();
+        byte[] address = message.m_remote_adress.getAddress().getAddress();
+        for (int i = 0; i < m_address.length; i++) {
+            byte m_addres = m_address[i];
+            byte addres = address[i];
+            if (m_addres != addres) {
+                return false;
+            }
+        }
+        return this.m_remote_adress.getPort() == message.m_remote_adress.getPort();
 
     }
 

@@ -5,21 +5,14 @@
  */
 package messages.engine;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.NoSuchElementException;
 import java.util.TreeSet;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import sun.java2d.pipe.hw.AccelDeviceEventListener;
 
 /**
  * Classe permettant de regrouper les channels associés aux peers connectés
@@ -51,6 +44,9 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         this.m_timestamp = 0;
         this.m_message_to_send = new LinkedList<>();
         this.m_engine = engine;
+
+//        MonitorMessagesToSend thread = new MonitorMessagesToSend(this, m_engine);
+//        thread.start();
     }
 
     /**
@@ -96,68 +92,74 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     @Override
     public void deliver(Channel channel, byte[] bytes) {
-        InetSocketAddress isa2 = new InetSocketAddress(channel.getRemoteAddress().getAddress(), channel.m_translation_port);
+        byte type_message = bytes[5];
+
+        int port = 0;
+        if (type_message == 0) {
+            byte[] id_tab = new byte[4];
+            System.arraycopy(bytes, 1, id_tab, 0, 4);
+            port = ByteBuffer.wrap(id_tab).getInt();
+        } else {
+            byte[] id_tab = new byte[4];
+            System.arraycopy(bytes, 11, id_tab, 0, 4);
+            port = ByteBuffer.wrap(id_tab).getInt();
+        }
+
+        /**
+         * Normalement l'InetAdress devrait être prise des bytes d'IP si ACK
+         * Mais comme on est en local ça ne change rien
+         */
+        InetSocketAddress isa2 = new InetSocketAddress(channel.getRemoteAddress().getAddress(), port);
         Message message = new Message(isa2, bytes);
-        Message final_message = null;
 
-        byte type_message = message.getType();
-
+        /**
+         * On set le timestamp
+         */
         byte time_stamp_message = bytes[0];
         if (time_stamp_message > this.m_timestamp) {
             this.m_timestamp = time_stamp_message;
         }
         this.m_timestamp++;
 
+        InetSocketAddress isa = null;
+        Message message_to_compare = null;
+
         /**
          * Si c'est de la data
          */
         if (type_message == 0) {
             this.m_messages.add(message);
-            final_message = getMessage(message);
         } else {
-            byte timestamp_ack = bytes[2];
-
-            byte[] ipAddr = new byte[]{bytes[3], bytes[4], bytes[5], bytes[6]};
-            InetAddress addr = null;
-            try {
-                addr = InetAddress.getByAddress(ipAddr);
-            } catch (UnknownHostException ex) {
-                Logger.getLogger(Peer.class.getName()).log(Level.SEVERE, null, ex);
-            }
-
-            byte[] bytesInt = {bytes[7], bytes[8], bytes[9], bytes[10]};
-            int port = ByteBuffer.wrap(bytesInt).getInt();
-            InetSocketAddress isa = new InetSocketAddress(addr, port);
-
-            Message message_to_compare = new Message(isa, bytes);
-
             synchronized (this.m_messages) {
-                if (this.m_messages.contains(message_to_compare)) {
-                    final_message = this.getMessage(message_to_compare);
+                if (this.m_messages.contains(message)) {
+                    Message final_message = this.getMessage(message);
                     final_message.increaseNumAck();
                 }
             }
         }
 
-//        ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
-//        int indice = 0;
-//        while (indice < listeMessages.size()) {
-//            Message msg_to_monitor = listeMessages.get(indice);
-//            if (msg_to_monitor.isReadyToDeliver(this.getNbPeers())) {
-//                byte[] byte_to_deliver = msg_to_monitor.getM_content();
-//                for (int i = 0; i < byte_to_deliver.length; i++) {
-//                    System.out.print("\t" + byte_to_deliver[i]);
-//                }
-//                System.out.println();
-//                System.out.flush();
-//
-//                m_messages.remove(msg_to_monitor);
-//                indice++;
-//
-//            } else {
-//                break;
-//            }
-//        }
+        ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
+        int indice = 0;
+        while (indice < listeMessages.size()) {
+            Message msg_to_monitor = listeMessages.get(indice);
+            if (msg_to_monitor.isReadyToDeliver(this.getNbPeers())) {
+                byte[] byte_to_deliver = msg_to_monitor.getM_content();
+                System.out.print("DELIVERED : \t");
+                for (int i = 0; i < byte_to_deliver.length; i++) {
+                    System.out.print("\t" + byte_to_deliver[i]);
+                }
+                System.out.println();
+                System.out.flush();
+
+                m_messages.remove(msg_to_monitor);
+                indice++;
+
+            } else {
+                break;
+            }
+        }
+
+//        this.m_engine.getM_selector().wakeup();
     }
 
     void read(InetSocketAddress isa) {
@@ -166,24 +168,38 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     }
 
     void send() {
-        m_timestamp++;
-        byte[] msg_to_send = this.m_message_to_send.removeFirst();
-        byte type_message_sent = msg_to_send[0];
-
-        byte finalBytes[] = new byte[msg_to_send.length + 1];
-        finalBytes[0] = m_timestamp;
-        System.arraycopy(msg_to_send, 0, finalBytes, 1, msg_to_send.length);
-
-        /**
-         * On a créé un message [timestamp | type | data]
-         */
-        List<Channel> channels = new ArrayList<>(this.getM_channels().values());
-        for (Channel channel : channels) {
-            channel.send(finalBytes, 0, finalBytes.length);
-        }
-
-        if (type_message_sent == 0) {
+        if (!this.m_message_to_send.isEmpty()) {
             m_timestamp++;
+            byte[] msg_to_send = null;
+            try {
+                msg_to_send = this.m_message_to_send.removeFirst();
+            } catch (NoSuchElementException ex) {
+                System.out.println(ex);
+            }
+            byte type_message_sent = msg_to_send[0];
+
+            /**
+             * On rajoute 5 cases pour le timestamp et l'id
+             */
+            byte finalBytes[] = new byte[msg_to_send.length + 5];
+            finalBytes[0] = m_timestamp;
+            ByteBuffer b = ByteBuffer.allocate(4);
+            b.putInt(this.m_engine.m_port_listening);
+            byte[] result = b.array();
+            System.arraycopy(result, 0, finalBytes, 1, result.length);
+            System.arraycopy(msg_to_send, 0, finalBytes, 5, msg_to_send.length);
+
+            /**
+             * On a créé un message [timestamp | id | type | data]
+             */
+            List<Channel> channels = new ArrayList<>(this.getM_channels().values());
+            for (Channel channel : channels) {
+                channel.send(finalBytes, 0, finalBytes.length);
+            }
+
+            if (type_message_sent == 0) {
+                m_timestamp++;
+            }
         }
     }
 
@@ -206,7 +222,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             try {
                 result = listeMessages.get(index);
             } catch (ArrayIndexOutOfBoundsException ex) {
-                System.out.println("Here");
+                
             }
         }
         return result;
