@@ -119,7 +119,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         if (time_stamp_message > this.m_timestamp) {
             this.m_timestamp = time_stamp_message;
         }
-        this.m_timestamp++;
+        this.m_timestamp++;  // on a reçu un ACK ou un message de data
 
         InetSocketAddress isa = null;
         Message message_to_compare = null;
@@ -195,10 +195,6 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             List<Channel> channels = new ArrayList<>(this.getM_channels().values());
             for (Channel channel : channels) {
                 channel.send(finalBytes, 0, finalBytes.length);
-            }
-
-            if (type_message_sent == 0) {
-                m_timestamp++;
             }
         }
     }
