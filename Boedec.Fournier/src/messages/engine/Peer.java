@@ -169,7 +169,6 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 
     void send() {
         if (!this.m_message_to_send.isEmpty()) {
-            m_timestamp++;
             byte[] msg_to_send = null;
             try {
                 msg_to_send = this.m_message_to_send.removeFirst();
@@ -196,6 +195,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             for (Channel channel : channels) {
                 channel.send(finalBytes, 0, finalBytes.length);
             }
+            m_timestamp++;
         }
     }
 
