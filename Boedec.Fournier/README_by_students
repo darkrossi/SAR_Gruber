@@ -9,6 +9,7 @@ HOW TO RUN TEST (3 peers) :
   - Each delivered messages are displayed in the console.
 
 OVERVIEW OF THE MAIN JAVA CLASSES :
+
   - Main :
     - Waits for a port number
     - Creates a NioEngine object
@@ -33,3 +34,18 @@ OVERVIEW OF THE MAIN JAVA CLASSES :
 
   - NioEngine :
     - This is the element that monitors the keys of the selector. It calls the associated Peer for it to decide what to do next.
+
+
+  - Message :
+    - Two types of message : ACK or data.
+    - We will create more types of message when we will implement a more 'in-depth' dynamic group system.
+      -> 'hello' type message will carry a peer request to join a group.
+      -> another type will carry the response which will contain the addresses of all group members
+    - When a peer receives ACK's for a message, it increments a counter that is located inside its local copy of the message.
+    - To prevent conflicts with equal timestamps, the message records the listening port of the message author.
+
+
+  - BroadcastThread :
+    - Every peer starts this thread once they are connected to the group
+    - It sends data to every other peers in the group. The data is peer-specific, thus it is easily recognizable during tests.
+    - For now we slowed down the frequency at which data is sent, so that we can verify the correct deliver order more easily.

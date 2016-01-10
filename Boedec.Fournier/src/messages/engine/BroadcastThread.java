@@ -24,16 +24,19 @@ public class BroadcastThread extends Thread {
 
     @Override
     public void run() {
-        super.run(); //To change body of generated methods, choose Tools | Templates.
+        super.run();
 
         for (;;) {
 
+        	/*
+        	 * On crée un tableau de data propre au Peer, qui sera broadcasté au groupe.
+        	 */
             int length = 3;
             byte bytes[] = new byte[length];
             for (int i = 0; i < length; i++) {
                 bytes[i] = (byte) (i + 8 * (m_engine.m_port_listening - 2004));
             }
-
+            
             /**
              * On ajoute en tête du message le type de message
              *  0 = DATA, 1 = ACK
@@ -42,7 +45,7 @@ public class BroadcastThread extends Thread {
             finalBytes[0] = 0;
             System.arraycopy(bytes, 0, finalBytes, 1, bytes.length);
 
-            m_peer.addMessageToSend(finalBytes);
+            m_peer.addMessageToSend(finalBytes); // On ajoute ce message à la file d'attente d'émission de messages du Peer
 
             List<Channel> channels = new ArrayList<Channel>(m_peer.getM_channels().values());
             synchronized (channels) {
@@ -54,7 +57,7 @@ public class BroadcastThread extends Thread {
             m_engine.getM_selector().wakeup();
 
             try {
-                sleep(2000); // 3 secondes
+                sleep(2000); // 2 secondes d'attente. Facilite les tests, mais devra être retiré lors du test en burst mode.
             } catch (InterruptedException ex) {
                 interrupt();
             }

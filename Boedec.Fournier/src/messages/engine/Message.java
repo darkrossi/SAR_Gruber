@@ -16,11 +16,11 @@ import java.util.Objects;
 public class Message implements Comparable<Message> {
 
     private InetSocketAddress m_remote_adress;
-    private byte m_type;
-    private byte[] m_content;
-    private int m_timestamp;
-    private int m_num_ack;
-    private int m_id;
+    private byte m_type; // Type 0 = data, Type 1 = ACK
+    private byte[] m_content; // content of the message
+    private int m_timestamp; // timestamp of the peer when it created this message
+    private int m_num_ack; // number of ack's received for this message
+    private int m_id; // id corresponding to the peer who created the message (it is peer's listening port)
 
     /**
      * Le contenu du paramètre bytes est de cette forme [timestamp | type |
@@ -107,7 +107,7 @@ public class Message implements Comparable<Message> {
     }
 
     public int increaseNumAck() {
-        this.m_num_ack++;
+        this.m_num_ack++; // when a peer receives an ack for this message, it increments this counter
         return this.m_num_ack;
     }
 
