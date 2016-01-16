@@ -30,17 +30,21 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     NioEngine m_engine;
     private int m_timestamp;
 
+    FileThread m_file_thread;
+
     /**
      * Constructeur
      *
      * @param engine
      */
-    public Peer(NioEngine engine) {
+    public Peer(NioEngine engine, FileThread file_thread) {
         this.m_channels = new HashMap<>();
         this.m_messages = new TreeSet<>();
         this.m_timestamp = 0;
         this.m_message_to_send = new LinkedList<>();
         this.m_engine = engine;
+
+        this.m_file_thread = file_thread;
     }
 
     /**
@@ -160,6 +164,8 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
                 }
                 System.out.println();
                 System.out.flush();
+
+                m_file_thread.addDeliveredMessage(byte_to_deliver);
 
                 m_messages.remove(msg_to_monitor);
                 indice++;

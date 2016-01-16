@@ -18,8 +18,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Iterator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
@@ -33,6 +31,9 @@ public class NioEngine extends Engine {
 
     boolean thread_launched = false;
     InetAddress m_localhost = InetAddress.getByName("localhost");
+    
+    boolean m_running = true;
+    boolean m_has_accept = false;
 
     /**
      * Constructor
@@ -41,6 +42,7 @@ public class NioEngine extends Engine {
      */
     NioEngine() throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
+        super.startEcho();
     }
 
     /**
@@ -64,10 +66,10 @@ public class NioEngine extends Engine {
      */
     @Override
     public void mainloop() {
-
+        BroadcastThread broadcast_thread = null;
         try {
             long delay = 0;
-            for (;;) {
+            while(m_running){
                 getM_selector().select(delay);
                 Iterator<?> selectedKeys = this.getM_selector().selectedKeys().iterator();
                 if (selectedKeys.hasNext()) {
@@ -76,6 +78,8 @@ public class NioEngine extends Engine {
                     if (!key.isValid()) {
                         continue;
                     } else if (key.isAcceptable()) {
+                        acceptCount++;
+                        m_has_accept = true;
                         /**
                          * Si on accepte une connexion alors on crée un
                          * SocketChannel associé, on l'enregistre dans le
@@ -103,7 +107,7 @@ public class NioEngine extends Engine {
                          * périodiquement
                          */
                         if (!thread_launched) {
-                            BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
+                            broadcast_thread = new BroadcastThread(peer, this);
                             broadcast_thread.start();
                             thread_launched = true;
                         }
@@ -141,6 +145,7 @@ public class NioEngine extends Engine {
                         }
 
                     } else if (key.isConnectable()) {
+                        connectCount++;
                         /**
                          * Si on se connecte à un peer alors on crée un
                          * SocketChannel et on appelle le Peer pour qu'il prenne
@@ -169,7 +174,7 @@ public class NioEngine extends Engine {
                              * des messages périodiquement
                              */
                             if (!thread_launched) {
-                                BroadcastThread broadcast_thread = new BroadcastThread(peer, this);
+                                broadcast_thread = new BroadcastThread(peer, this);
                                 broadcast_thread.start();
                                 thread_launched = true;
                             }
@@ -182,6 +187,7 @@ public class NioEngine extends Engine {
                     }
                 }
             }
+            broadcast_thread.m_running = false;
         } catch (IOException ex) {
             System.err.println("NioEngine got an exeption: " + ex.getMessage());
             ex.printStackTrace(System.err);
