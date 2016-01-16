@@ -38,6 +38,7 @@ public abstract class Engine {
         } catch (IOException exception) {
             System.out.println("Erreur lors de la lecture : " + exception.getMessage());
         }
+        startTime = System.currentTimeMillis();
 
     }
 
