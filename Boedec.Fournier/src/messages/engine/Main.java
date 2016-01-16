@@ -52,6 +52,7 @@ public class Main {
 
         file_thread.destroy();
         engine.m_running = false;
+        engine.pw.close();
 
         /**
          * Seul le dernier connecté est censé pouvoir faire ça

@@ -73,6 +73,7 @@ public class NioChannel extends Channel {
     @Override
     public void send(byte[] bytes, int offset, int length) {
         assert (m_state_write == CONNECTED);
+        m_peer.m_engine.writeCount++;
         m_state_write = SENDING;
 
         /**
@@ -138,6 +139,7 @@ public class NioChannel extends Channel {
      */
     @Override
     public void read() {
+        m_peer.m_engine.readCount++;
         try {
             int len, count = 0;
             switch (m_state_read) {

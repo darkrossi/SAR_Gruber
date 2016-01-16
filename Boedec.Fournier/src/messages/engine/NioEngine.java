@@ -32,7 +32,6 @@ public class NioEngine extends Engine {
     boolean thread_launched = false;
     InetAddress m_localhost = InetAddress.getByName("localhost");
     
-    boolean m_running = true;
     boolean m_has_accept = false;
 
     /**
@@ -80,6 +79,7 @@ public class NioEngine extends Engine {
                     } else if (key.isAcceptable()) {
                         acceptCount++;
                         m_has_accept = true;
+                        
                         /**
                          * Si on accepte une connexion alors on crée un
                          * SocketChannel associé, on l'enregistre dans le

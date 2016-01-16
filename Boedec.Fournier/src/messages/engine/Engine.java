@@ -1,6 +1,10 @@
 package messages.engine;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -24,7 +28,17 @@ public abstract class Engine {
         System.exit(-1);
     }
 
+    PrintWriter pw;
+    boolean m_running = true;
+
     public Engine() {
+        File f = new File(String.valueOf("Stats.txt"));
+        try {
+            this.pw = new PrintWriter(new BufferedWriter(new FileWriter(f)));
+        } catch (IOException exception) {
+            System.out.println("Erreur lors de la lecture : " + exception.getMessage());
+        }
+
     }
 
     long lastEcho;
@@ -41,7 +55,7 @@ public abstract class Engine {
     Thread echoThread;
     Runnable echo = new Runnable() {
         public void run() {
-            while (true) {
+            while (m_running) {
                 try {
                     Thread.sleep(1000);
                     long now = System.currentTimeMillis();
@@ -49,31 +63,33 @@ public abstract class Engine {
                         if (Options.VERBOSE_STATS) {
                             long telapsed = (now - startTime) / 1000;
                             long elapsed = (now - lastEcho) / 1000;
-                            System.out.println("Stats: ");
+//                            pw.println("(" + now + ")");
 
                             totalAcceptCount += acceptCount;
                             long tavg = totalAcceptCount / telapsed;
                             long avg = acceptCount / elapsed;
-                            System.out.println("   accept: " + totalAcceptCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
+                            pw.println("   accept: " + totalAcceptCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
                             acceptCount = 0;
 
                             totalConnectCount += connectCount;
                             tavg = totalConnectCount / telapsed;
                             avg = connectCount / elapsed;
-                            System.out.println("   Connect: " + totalConnectCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
+                            pw.println("   Connect: " + totalConnectCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
                             connectCount = 0;
 
                             totalReadCount += readCount;
                             tavg = totalReadCount / telapsed;
                             avg = readCount / elapsed;
-                            System.out.println("   Read: " + totalReadCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
+                            pw.println("   Read: " + totalReadCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
                             readCount = 0;
 
                             totalWriteCount += writeCount;
                             tavg = totalWriteCount / telapsed;
                             avg = writeCount / elapsed;
-                            System.out.println("   Write: " + totalWriteCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
+                            pw.println("   Write: " + totalWriteCount + " (" + tavg + "/s)" + " (" + avg + "/s)");
                             writeCount = 0;
+
+                            pw.println();
                         } else {
                             totalAcceptCount += acceptCount;
                             acceptCount = 0;
