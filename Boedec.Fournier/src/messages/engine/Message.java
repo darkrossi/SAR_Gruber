@@ -149,4 +149,28 @@ public class Message implements Comparable<Message> {
         }
     }
 
+    @Override
+    public String toString() {
+        String rst = this.m_timestamp + " - " + this.m_id + " - " + this.m_type + " - ";
+        String data = "";
+        if (this.m_type == 1) {
+            byte[] id_tab = new byte[4];
+            System.arraycopy(this.m_content, 9, id_tab, 0, 4);
+            int timestamp = ByteBuffer.wrap(id_tab).getInt();
+            
+            String ip = this.m_content[13] + "." + this.m_content[14] + "." + this.m_content[15] + "." + this.m_content[16];
+            
+            System.arraycopy(this.m_content, 17, id_tab, 0, 4);
+            int port = ByteBuffer.wrap(id_tab).getInt();
+            
+            data = timestamp + " - " + ip + " - " + port;
+        } else {
+            for (int i = 9; i < this.m_content.length; i++) {
+                byte b = this.m_content[i];
+                data += b + " ";
+            }
+        }
+        return rst + data;
+    }
+
 }
