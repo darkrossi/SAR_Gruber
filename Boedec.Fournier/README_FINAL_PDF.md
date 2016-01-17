@@ -86,3 +86,4 @@ Nous n'affichons pas le délai de deliver d'un message. Il faudrait que l'emette
 <Message.java l.43 format ???>
 <burst mode : les peers doivent envoyer le plus rapidement possible>
 <Verifier si il y a des try catch qui n exit pas : incorrect >
+<System.out.println("Broadcast en cours. Appuyez sur ENTREE pour arreter et lancer la verification.");>
