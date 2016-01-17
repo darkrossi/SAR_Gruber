@@ -48,7 +48,7 @@ Chaque Peer tient à jour une file d'attente dans laquelle il stocke les message
 *Précision :* Un message de type 3 (HELLO2) aura la priorité sur n'importe quel autre, même si son timestamp est plus grand qu'un autre message de la file d'attente.    
 Ce sont également les messages eux-même qui comptent le nombre de acks reçus qui leur correspondent.
 
-# The overall class design of your implementation
+# Sommaire du design des classes de notre implémentation
 - Main.java : Point d'entrée du programme. Instancie un Peer et son NioEngine. Instancie également un FileThread qui sera utile pour la vérification de l'ordre. En fin d'execution, lance la vérification de l'ordre des messages delivered.
 
 - BroadcastThread.java : Lancé par chaque Peer une fois qu'ils sont connectés au groupe. Les Peer envoient alors des messages le plus rapidement possible vers l'ensemble des autres peers.
@@ -81,7 +81,7 @@ Ce sont également les messages eux-même qui comptent le nombre de acks reçus 
 - Renseigner la taille des messages souhaitée (64, 256, 512 ou 1024 bytes).
 
 **Pour vérifier l'ordre des messages delivered :**  
-Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent dans l'ordre chronologique (ex : 1er arrivant = 2005, 2ème arrivant = 2006, etc..). Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
+Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent (port1 = port0 + 1, port2 = port1 + 1, etc) ... Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
 Une fois qu'au moins deux peers sont connectés ils commençent à s'envoyer des messages. Pour arrêter l'envoi de messages et vérifier l'ordre, il faut appuyer sur la touche 'ENTREE' dans la console de chaque peer. Le vérificateur écrira dans la console si l'ordre a bien été respecté.
 
 **Pour observer les statistiques :**  
@@ -97,8 +97,3 @@ Nous n'affichons pas le délai de deliver d'un message. Il faudrait que l'emette
 
 ## Taille du groupe
 On remarque qu'à partir d'une taille de groupe supérieure ou égale à 5 alors le nouvel arrivant est bloqué dans sa délivrance des messages. Cependant, les 4 autres personnes du groupe continuent leur système de délivrance.
-
-
-<Where are the main entry points (classes, methods) in the code>
-<Other main points that are important in order to understand your code>
-<stats : bandwidth et delai ??>
