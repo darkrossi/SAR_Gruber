@@ -20,7 +20,7 @@ import java.util.Objects;
 public class Message implements Comparable<Message> {
 
     InetSocketAddress m_remote_adress;
-    byte m_type; // Type 0 = data, Type 1 = ACK
+    byte m_type; // 0 = data, 1 = ACK, 2 = HELLO1, 3 = HELLO2, 4 = EXISTING_MESSAGES, 5 = EXISTING_PEERS 
     byte[] m_content; // content of the message
     int m_timestamp; // timestamp of the peer when it created this message
     int m_num_ack; // number of ack's received for this message
@@ -119,11 +119,9 @@ public class Message implements Comparable<Message> {
     }
 
     public boolean isReadyToDeliver(int nb_peers, int port_listening) {
-//        System.out.println(this.m_num_ack + " ==? " + nb_peers);
         if (this.getM_id() == port_listening) {
             return this.getM_num_ack() >= 2 * nb_peers;
         } else {
-
             return this.getM_num_ack() >= nb_peers + 1;
         }
 
@@ -182,6 +180,12 @@ public class Message implements Comparable<Message> {
         return rst + data;
     }
 
+    /**
+     * Pour pouvoir récupérer de façon exploitable la partie "data" d'un
+     * message.
+     *
+     * @return la data du message
+     */
     public String getData() {
         String data = "";
         byte[] id_tab = new byte[4];
@@ -224,7 +228,7 @@ public class Message implements Comparable<Message> {
                         System.arraycopy(only_data, indice, id_tab, 0, 4);
                         int length = ByteBuffer.wrap(id_tab).getInt();
                         indice += 4;
-                        
+
                         byte[] current_data = new byte[length];
                         System.arraycopy(only_data, indice, current_data, 0, length);
                         for (int i = 0; i < current_data.length; i++) {
@@ -241,6 +245,12 @@ public class Message implements Comparable<Message> {
         return data;
     }
 
+    /**
+     * Permet de récupérer une liste contenant les messages envoyés dans un
+     * message de type 4 lors d'une tentative d'entrée dans un groupe.
+     *
+     * @return @throws UnknownHostException
+     */
     public List<Message> getExistingMessages() throws UnknownHostException {
         List<Message> rst = new ArrayList<>();
         if (this.m_type == 4 && this.m_content.length > 9) {

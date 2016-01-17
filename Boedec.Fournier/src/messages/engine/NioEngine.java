@@ -194,6 +194,9 @@ public class NioEngine extends Engine {
 
         m_port_listening = port;
 
+        /**
+         * On crée le fichier de Stat associé.
+         */
         File f = new File(String.valueOf("Stats" + port + ".txt"));
         try {
             this.pw = new PrintWriter(new BufferedWriter(new FileWriter(f)));
@@ -202,6 +205,9 @@ public class NioEngine extends Engine {
         }
         startTime = System.currentTimeMillis();
 
+        /**
+         * On peut lancer le thread d'écoute des stats.
+         */
         super.startEcho();
 
         /**

@@ -66,27 +66,25 @@ public class FileThread extends Thread {
         }
     }
 
-    public void end(boolean has_accept, int port_listening) throws IOException {
+    public void end(boolean has_accept, int port_listening, int remote_port) throws IOException {
         System.out.println("Vérification automatique en cours ...");
 
         this.has_to_finish = true;
 
+        /**
+         * On attend qu'il n'y ait plus de messages à écrire dans le fichier.
+         */
         while (!has_finished);
+        this.pw.close();
 
         /**
          * Seul le dernier connecté est censé pouvoir faire ça
          */
         if (!has_accept) {
-            compareDeliveredMessagesFiles(port_listening);
+            compareDeliveredMessagesFiles(port_listening, remote_port);
         }
 
         System.exit(0);
-    }
-
-    @Override
-    public void destroy() {
-//        super.destroy();
-        this.pw.close();
     }
 
 }
