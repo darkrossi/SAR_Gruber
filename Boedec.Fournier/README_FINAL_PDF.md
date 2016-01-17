@@ -9,7 +9,8 @@ date: 17 Janvier 2016
 - Marche jusqu'à 4 peers.
 - Les peers envoient des messages avec un délai aléatoire entre 50 et 100 ms.
 - Les messages sont bien délivrés dans le même ordre, un vérificateur le confirme.
-- Le groupe est dynamique.
+- Un début de tolérance aux fautes (détection d'un peer qui part)
+- Le groupe est dynamique
 
 # Design du totally ordered multicast
 
