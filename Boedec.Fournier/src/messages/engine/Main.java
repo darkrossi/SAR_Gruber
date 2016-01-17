@@ -32,7 +32,7 @@ public class Main {
         // Le tout premier peer entrera un port distant = à son port local.
         System.out.println("Port d'écoute de l'hôte distant : ");
         int m_remote_port = sc.nextInt();
-        
+
         System.out.println("Taille des paquets : ");
         int m_paquet_size = sc.nextInt();
 
@@ -59,15 +59,8 @@ public class Main {
         file_thread.destroy();
         engine.m_running = false;
         engine.pw.close();
-
-        /**
-         * Seul le dernier connecté est censé pouvoir faire ça
-         */
-        if (!engine.m_has_accept) {
-            compareDeliveredMessagesFiles(m_port_listening);
-        }
-
-        System.exit(0);
+        
+        file_thread.end(engine.m_has_accept, m_port_listening);
 
     }
 
@@ -76,28 +69,38 @@ public class Main {
          * On va chercher tous les fichiers créés
          */
         HashMap<Integer, BufferedReader> files = new HashMap<>();
+        HashMap<Integer, Boolean> has_started = new HashMap<>();
         for (int i = 2005; i < listening_port + 1; i++) {
             File file_temp = new File(String.valueOf(i) + ".txt");
             BufferedReader br = new BufferedReader(new FileReader(file_temp));
             files.put(i, br);
+            has_started.put(i, false);
         }
 
         String message = "Le total ordonnancement a été respecté ! WELL DONE !";
         boolean has_finished = false;
         while (!has_finished) {
             String line = null, line_temp;
-            boolean has_juste_entered = true;
+            int timestamp = 0, timestamp_temp;
+            boolean has_just_entered = true;
             for (Map.Entry<Integer, BufferedReader> entry : files.entrySet()) {
                 Integer port = entry.getKey();
                 BufferedReader buffered_reader = entry.getValue();
                 if ((line_temp = buffered_reader.readLine()) != null) {
+//                    System.out.println("fichier 22" + port + " : " + line_temp);
                     // process the line.
-                    if (has_juste_entered) {
+                    if (has_just_entered) {
                         line = line_temp;
-                        has_juste_entered = false;
+                        timestamp = Integer.parseInt(line_temp.split(" - ")[0]);
+                        has_just_entered = false;
                     }
-                    if (!line.equals(line_temp)) {
+
+                    timestamp_temp = Integer.parseInt(line_temp.split(" - ")[0]);
+
+                    if (!line.equals(line_temp) && timestamp_temp < timestamp) {
                         message = "Le total ordonancement n'a pas été respecté ! TOO BAD !";
+                        has_finished = true;
+                        break;
                     }
                 } else {
                     has_finished = true;

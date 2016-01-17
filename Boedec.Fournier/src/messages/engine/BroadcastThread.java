@@ -65,7 +65,7 @@ public class BroadcastThread extends Thread {
 
                 m_engine.getM_selector().wakeup();
 
-                int random_delay = randInt(1, 1000);
+                int random_delay = randInt(50, 100);
                 try {
                     this.sleep(random_delay); // 2 secondes d'attente. Facilite les tests, mais devra être retiré lors du test en burst mode.
                 } catch (InterruptedException ex) {

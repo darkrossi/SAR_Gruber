@@ -31,17 +31,6 @@ public abstract class Engine {
     PrintWriter pw;
     boolean m_running = true;
 
-    public Engine() {
-        File f = new File(String.valueOf("Stats.txt"));
-        try {
-            this.pw = new PrintWriter(new BufferedWriter(new FileWriter(f)));
-        } catch (IOException exception) {
-            System.out.println("Erreur lors de la lecture : " + exception.getMessage());
-        }
-        startTime = System.currentTimeMillis();
-
-    }
-
     long lastEcho;
     long startTime;
 

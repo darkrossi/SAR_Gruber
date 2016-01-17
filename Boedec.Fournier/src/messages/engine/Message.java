@@ -220,15 +220,19 @@ public class Message implements Comparable<Message> {
                     System.arraycopy(this.m_content, 9, only_data, 0, only_data.length);
                     int indice = 0;
                     while (only_data.length > indice) {
-                        byte length = only_data[indice];
+                        id_tab = new byte[4];
+                        System.arraycopy(only_data, indice, id_tab, 0, 4);
+                        int length = ByteBuffer.wrap(id_tab).getInt();
+                        indice += 4;
+                        
                         byte[] current_data = new byte[length];
-                        System.arraycopy(only_data, indice + 1, current_data, 0, length);
+                        System.arraycopy(only_data, indice, current_data, 0, length);
                         for (int i = 0; i < current_data.length; i++) {
                             byte b = current_data[i];
                             data += String.valueOf(b) + " ";
                         }
                         data += " - ";
-                        indice += length + 1;
+                        indice += length;
                     }
                 }
                 break;
@@ -244,15 +248,20 @@ public class Message implements Comparable<Message> {
             System.arraycopy(this.m_content, 9, only_data, 0, only_data.length);
             int indice = 0;
             while (only_data.length > indice) {
-                byte length = only_data[indice];
+
+                byte[] id_tab = new byte[4];
+                System.arraycopy(only_data, indice, id_tab, 0, 4);
+                int length = ByteBuffer.wrap(id_tab).getInt();
+                indice += 4;
+
                 byte[] current_data = new byte[length - 1];
-                System.arraycopy(only_data, indice + 2, current_data, 0, length - 1);
+                System.arraycopy(only_data, indice + 1, current_data, 0, length - 1);
                 InetSocketAddress isa2 = new InetSocketAddress(InetAddress.getByName("localhost"), this.getM_id());
                 Message msg = new Message(isa2, current_data);
-                msg.m_num_ack = only_data[indice + 1];
+                msg.m_num_ack = only_data[indice];
                 msg.increaseNumAck(0);
                 rst.add(msg);
-                indice += length + 1;
+                indice += length;
             }
             return rst;
         } else {
