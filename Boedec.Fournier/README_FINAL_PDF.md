@@ -9,7 +9,7 @@ date: 17 Janvier 2016
 - Marche jusqu'à 4 peers.
 - Les peers envoient des messages avec un délai aléatoire entre 50 et 100 ms.
 - Les messages sont bien délivrés dans le même ordre, un vérificateur le confirme.
-- Le groupe est dynamique
+- Le groupe est dynamique.
 
 # Design du totally ordered multicast
 
@@ -25,25 +25,26 @@ date: 17 Janvier 2016
 
 - **Type 2 : HELLO1**  
 *Format* : [timestamp (4) | id (4) | 2 | id (4)]  
-*Contexte* : trame envoyée pour dire à quelqu'un qu'un peer arrive.
+*Contexte* : trame envoyée pour annoncer qu'on arrive.
 
 - **Type 3 : HELLO2**  
 *Format* : [timestamp (4) | id (4) | 3 | id (4)]
 *Contexte* : trame envoyée à tout le groupe pour dire qu'un nouveau peer veut rentrer dans le groupe.
 
 - **Type 4 : EXISTING_MESSAGES**
-*Format* : [timestamp (4) | id (4) | 4 | data(?)] et data est une suite de [longueur (4), nb_ack (1), data_message (?)]
+*Format* : [timestamp (4) | id (4) | 4 | data (?)] et data est une liste de [longueur (4), nb_ack (1), data_message (?)]
 *Contexte* : trame envoyée au nouvel arrivant pour lui faire parvenir les messages non délivrés du groupe.
 
 - **Type 5 : EXISTING_PEERS**  
-*Format* : [timestamp (4) | id (4) | 4 | data(?)] et data est une suite de [id (4)]
+*Format* : [timestamp (4) | id (4) | 4 | data (?)] et data est une liste de [id (4)]
 *Contexte* : trame envoyée au nouvel arrivant pour lui faire parvenir les ids des autres peers du groupe.
 
 ## Fonctionnement du vérificateur
-Après avoir terminé les éxécutions en appuyant sur la touche "ENTREE" une fonction (lancée par le dernier arrivant seulement) s'occupe de lire les fichiers générés contenant les messages délivrés lors de l'éxécution ligne par ligne. Si il y a une différence alors un message s'affiche exprimant que le total ordonnancement des messages n'a pas correctement fonctionné.
+Après avoir terminé les éxécutions en appuyant sur la touche "ENTREE", une fonction (lancée par le dernier arrivant seulement) s'occupe de lire ligne par ligne les fichiers générés contenant les messages délivrés lors de l'éxécution. Si il y a une différence alors un message s'affiche exprimant que le total ordonnancement des messages n'a pas correctement fonctionné.
 
 ## File d'attente des messages à deliver
 Chaque Peer tient à jour une file d'attente dans laquelle il stocke les messages qu'il a reçu (et envoyé). Cette file d'attente prend la forme d'un SortedSet < Message >. En effet les messages sont classés selon leur timestamp.  
+*Précision :* Un message de type 3 (HELLO2) aura la priorité sur n'importe quel autre, même si son timestamp est plus grand qu'un autre message de la file d'attente.    
 Ce sont également les messages eux-même qui comptent le nombre de acks reçus qui leur correspondent.
 
 # The overall class design of your implementation
@@ -57,7 +58,7 @@ Ce sont également les messages eux-même qui comptent le nombre de acks reçus 
 
 - MonitorMessagesToSend.java : Vérifie en continu si il y a des messages à envoyer.
 
-- NioChannel.java : Dérive de Channel, permet de réaliser des opérations d'écriture/lecture sur un Channel.
+- NioChannel.java : Hérite de Channel, permet de réaliser des opérations d'écriture/lecture sur un Channel.
 
 - NioEngine.java : Surveille l'ensemble des channels et signale lorsqu'une opération de ACCEPT/CONNECT/WRITE/READ est possible.
 
@@ -79,23 +80,22 @@ Ce sont également les messages eux-même qui comptent le nombre de acks reçus 
 - Renseigner la taille des messages souhaitée (64, 256, 512 ou 1024 bytes).
 
 **Pour vérifier l'ordre des messages delivered :**  
-Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent dans l'ordre chronologique ... Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
+Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent dans l'ordre chronologique (ex : 1er arrivant = 2005, 2ème arrivant = 2006, etc..). Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
 Une fois qu'au moins deux peers sont connectés ils commençent à s'envoyer des messages. Pour arrêter l'envoi de messages et vérifier l'ordre, il faut appuyer sur la touche 'ENTREE' dans la console de chaque peer. Le vérificateur écrira dans la console si l'ordre a bien été respecté.
 
 **Pour observer les statistiques :**  
 Après avoir vérifié l'ordre des messages delivered, vous pouvez ouvrir le fichier 'Stats.txt' propre à chaque peer qui se trouve à la racine du projet.
 
-
 # Problèmes connus
 
 ## Vérificateur
-Le vérificateur n'est pas très flexible. (choix des ports, ordre de terminaison des peers)
+Le vérificateur n'est pas très flexible. (choix des ports, ordre de terminaison des peers).
 
 ## Statistiques
 Nous n'affichons pas le délai de deliver d'un message. Il faudrait que l'emetteur du message observe le temps qui s'écoule entre le moment où il crée le message, et le moment où il le délivre.
 
 ## Taille du groupe
-On remarque qu'à partir d'une taille de groupe supérieur ou égale à 5 alors le nouvel arrivant est bloqué dans sa délivrance des messages. Cependant, les 4 autres personnes du groupe continuent leur système de délivrance.
+On remarque qu'à partir d'une taille de groupe supérieure ou égale à 5 alors le nouvel arrivant est bloqué dans sa délivrance des messages. Cependant, les 4 autres personnes du groupe continuent leur système de délivrance.
 
 
 <Where are the main entry points (classes, methods) in the code>
