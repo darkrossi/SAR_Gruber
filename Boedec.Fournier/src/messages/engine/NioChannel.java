@@ -11,8 +11,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
@@ -100,27 +100,14 @@ public class NioChannel extends Channel {
          * Si c'est de la data qui a été envoyé alors on envoie aussi un ack de
          * taille 13 [ type (1) | timestamp_ack (4) | IP (4) | port (4)]
          */
-        if (type_message_sent == 0) {
-
+        if (type_message_sent == 0 || type_message_sent == 3 || type_message_sent == 1) {
             m_deliver.deliver(this, bytes);
-
-            byte bytes2[] = new byte[13];
-            bytes2[0] = 1;
-            System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
-            System.arraycopy(bytes, 4, bytes2, 9, 4); // On copie le port à la fin
-
-            InetAddress ia = null;
-            try {
-                ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
-            } catch (IOException ex) {
-                Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
-            }
-
-            byte[] tabIa = ia.getAddress();
-            System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
-
-            m_peer.addMessageToSend(bytes2);
-            m_peer.send();
+        } else {
+//            Message message = new Message(null, bytes);
+//            System.out.print("SENT : \t\t");
+//            System.out.print("\t" + message);
+//            System.out.println();
+//            System.out.flush();
         }
 
         m_state_write = CONNECTED;
@@ -177,45 +164,125 @@ public class NioChannel extends Channel {
                         assert (m_seqno++ == bytes[i]);
                     }
 
-                    /**
-                     * On a reçu un message de la forme [timestamp (4) | id (4)
-                     * | type (1) | data (?)] si data et [timestamp (4) | id (4)
-                     * | type (1) | timestamp_ack (4) | IP (4) | port (4)] si
-                     * ACK
-                     */
-                    m_deliver.deliver(this, bytes);
-
                     byte type_message_received = bytes[8];
 
+                    /**
+                     * On a reçu un message de la forme [timestamp (4) | id (4)
+                     * | type (1) | data (?)] si data [timestamp (4) | id (4) |
+                     * type (1) | timestamp_ack (4) | IP (4) | port (4)] si ACK
+                     */
+                    // SI ce n'est pas un HELLO1 ni un EXISTING_PEERS ni un EXISTING_MESSAGES alors on deliver
+                    if (type_message_received != 2 && type_message_received != 4 && type_message_received != 5) {
+                        m_deliver.deliver(this, bytes);
+                    }
+
+                    Message message;
                     /**
                      * Si c'est de la data qui a été envoyé alors on envoie
                      * aussi un ack de taille 13 [ type (1) | timestamp_ack (4)
                      * | IP (4) | port (4)]
                      */
-                    if (type_message_received == 0) {
+                    switch (type_message_received) {
+                        case 0:
+                        case 3:
 //                        System.out.println("ACK REMOTE_MESSAGE");
 
-                        byte bytes2[] = new byte[13];
-                        bytes2[0] = 1;
-                        System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
-                        System.arraycopy(bytes, 4, bytes2, 9, 4); // On copie le port à la fin
+                            byte bytes2[] = new byte[9];
+                            bytes2[0] = 1;
+                            System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
+                            System.arraycopy(bytes, 4, bytes2, 5, 4); // On copie le port à la fin
 
-                        InetAddress ia = null;
-                        try {
-                            ia = ((InetSocketAddress) this.m_ch.getLocalAddress()).getAddress();
-                        } catch (IOException ex) {
-                            Logger.getLogger(NioChannel.class.getName()).log(Level.SEVERE, null, ex);
-                        }
+                            m_peer.addMessageToSend(bytes2);
+                            m_peer.send();
+                            break;
+                        case 2:
 
-                        byte[] tabIa = ia.getAddress();
-                        System.arraycopy(tabIa, 0, bytes2, 5, 4); // On copie l'IP
+                            /**
+                             * Si on reçoit un message de type 2 alors il faut
+                             * envoyer un message de type 3 à tout le monde
+                             */
+                            message = new Message(null, bytes);
 
-                        m_peer.addMessageToSend(bytes2);
-                        m_peer.send();
+//                            System.out.print("RECEIVED : \t");
+//                            System.out.print("\t" + message);
+//                            System.out.println();
+//                            System.out.flush();
+
+                            /**
+                             * Il faut envoyer un message hello2
+                             */
+                            /**
+                             * Ajout de l'id
+                             */
+                            int length = 4;
+                            bytes = new byte[length];
+                            ByteBuffer b = ByteBuffer.allocate(4);
+                            b.putInt(Integer.parseInt(message.getData()));
+                            bytes = b.array();
+
+                            /**
+                             * On ajoute en tête du message le type de message 0
+                             * = DATA, 1 = ACK, 2 = HELLO1, 3 = HELLO2
+                             */
+                            byte finalBytes[] = new byte[bytes.length + 1];
+                            finalBytes[0] = 3;
+                            System.arraycopy(bytes, 0, finalBytes, 1, bytes.length);
+
+                            m_peer.addMessageToSend(finalBytes);
+                            m_peer.send();
+                            break;
+                        case 4:
+                            message = new Message(null, bytes);
+
+//                            System.out.print("RECEIVED : \t");
+//                            System.out.print("\t" + message);
+//                            System.out.println();
+//                            System.out.flush();
+
+                            List<Message> list_messages = message.getExistingMessages();
+//                            list_messages = new ArrayList<>(); // ligne debug
+                            if (list_messages != null && !list_messages.isEmpty()) {
+                                for (Message message_var : list_messages) {
+                                    m_peer.m_messages.add(message_var);
+                                }
+                            }
+
+                            break;
+                        case 5:
+                            message = new Message(null, bytes);
+
+//                            System.out.print("RECEIVED : \t");
+//                            System.out.print("\t" + message);
+//                            System.out.println();
+//                            System.out.flush();
+
+                            String id_peers = message.getData();
+                            String[] tab_id_peers = id_peers.split(" - ");
+
+                            int time_stamp_message = message.getM_timestamp();
+                            if (time_stamp_message > this.m_peer.m_timestamp) {
+                                this.m_peer.m_timestamp = time_stamp_message;
+                            }
+
+                            /**
+                             * -1 car on ne prend pas le dernier
+                             */
+                            for (int i = 0; i < tab_id_peers.length; i++) {
+                                int id_peer = Integer.parseInt(tab_id_peers[i]);
+                                if (id_peer != m_peer.m_engine.m_port_listening) {
+                                    InetAddress m_localhost = InetAddress.getByName("localhost");
+//                                    System.out.println("On tente de se connecter");
+                                    m_peer.m_engine.connect(m_localhost, id_peer, m_peer);
+                                }
+                            }
+                            m_peer.m_engine.broadcast_thread = new BroadcastThread(this.m_peer, this.m_peer.m_engine, this.m_peer.m_engine.paquet_size);
+                            m_peer.m_engine.broadcast_thread.start();
+                            this.m_peer.m_engine.thread_launched = true;
+                            break;
                     }
-
-                    m_key.interestOps(SelectionKey.OP_READ);
+                    break;
             }
+            m_key.interestOps(SelectionKey.OP_READ);
         } catch (IOException ex) {
             m_peer.imDead(this);
         }

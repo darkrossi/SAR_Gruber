@@ -5,8 +5,12 @@
  */
 package messages.engine;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -15,12 +19,14 @@ import java.util.Objects;
  */
 public class Message implements Comparable<Message> {
 
-    private InetSocketAddress m_remote_adress;
-    private byte m_type; // Type 0 = data, Type 1 = ACK
-    private byte[] m_content; // content of the message
-    private int m_timestamp; // timestamp of the peer when it created this message
-    private int m_num_ack; // number of ack's received for this message
-    private int m_id; // id corresponding to the peer who created the message (it is peer's listening port)
+    InetSocketAddress m_remote_adress;
+    byte m_type; // Type 0 = data, Type 1 = ACK
+    byte[] m_content; // content of the message
+    int m_timestamp; // timestamp of the peer when it created this message
+    int m_num_ack; // number of ack's received for this message
+    int m_id; // id corresponding to the peer who created the message (it is peer's listening port)
+
+    List<Integer> m_id_acks = new ArrayList<>();
 
     /**
      * Le contenu du paramètre bytes est de cette forme [timestamp | type |
@@ -95,7 +101,7 @@ public class Message implements Comparable<Message> {
     public int hashCode() {
         int hash = 5;
         hash = 97 * hash + Objects.hashCode(this.m_remote_adress);
-        hash = 97 * hash + this.m_timestamp;
+        hash = 97 * hash + this.getM_timestamp();
         return hash;
     }
 
@@ -106,13 +112,21 @@ public class Message implements Comparable<Message> {
         return m_timestamp;
     }
 
-    public int increaseNumAck() {
+    public int increaseNumAck(int remote_port) {
         this.m_num_ack++; // when a peer receives an ack for this message, it increments this counter
-        return this.m_num_ack;
+        this.getM_id_acks().add(remote_port);
+        return this.getM_num_ack();
     }
 
-    public boolean isReadyToDeliver(int nb_peers) {
-        return this.m_num_ack == nb_peers;
+    public boolean isReadyToDeliver(int nb_peers, int port_listening) {
+//        System.out.println(this.m_num_ack + " ==? " + nb_peers);
+        if (this.getM_id() == port_listening) {
+            return this.getM_num_ack() >= 2 * nb_peers;
+        } else {
+
+            return this.getM_num_ack() >= nb_peers + 1;
+        }
+
     }
 
     /**
@@ -124,9 +138,21 @@ public class Message implements Comparable<Message> {
 
     @Override
     public int compareTo(Message o) {
-        if (this.m_timestamp < o.m_timestamp) {
+        if (this.m_type != 1 && o.m_type != 1) {
+            if (this.m_type == 3) {
+                if (o.m_type != 3) {
+                    return -1;
+                } else {
+                    // On passe à la suite
+                }
+            } else if (o.m_type == 3) {
+                return 1;
+            }
+        }
+
+        if (this.getM_timestamp() < o.getM_timestamp()) {
             return -1;
-        } else if (this.m_timestamp > o.m_timestamp) {
+        } else if (this.getM_timestamp() > o.getM_timestamp()) {
             return 1;
         } else {
             byte[] m_address = this.m_remote_adress.getAddress().getAddress();
@@ -151,26 +177,122 @@ public class Message implements Comparable<Message> {
 
     @Override
     public String toString() {
-        String rst = this.m_timestamp + " - " + this.m_id + " - " + this.m_type + " - ";
-        String data = "";
-        if (this.m_type == 1) {
-            byte[] id_tab = new byte[4];
-            System.arraycopy(this.m_content, 9, id_tab, 0, 4);
-            int timestamp = ByteBuffer.wrap(id_tab).getInt();
-            
-            String ip = this.m_content[13] + "." + this.m_content[14] + "." + this.m_content[15] + "." + this.m_content[16];
-            
-            System.arraycopy(this.m_content, 17, id_tab, 0, 4);
-            int port = ByteBuffer.wrap(id_tab).getInt();
-            
-            data = timestamp + " - " + ip + " - " + port;
-        } else {
-            for (int i = 9; i < this.m_content.length; i++) {
-                byte b = this.m_content[i];
-                data += b + " ";
-            }
-        }
+        String rst = this.getM_timestamp() + " - " + this.getM_id() + " - " + this.m_type + " -- ";
+        String data = this.getData();
         return rst + data;
+    }
+
+    public String getData() {
+        String data = "";
+        byte[] id_tab = new byte[4];
+        switch (this.m_type) {
+            case 0:
+                for (int i = 9; i < this.m_content.length; i++) {
+                    byte b = this.m_content[i];
+                    data += String.valueOf(b) + " ";
+                }
+                break;
+            case 1:
+                System.arraycopy(this.m_content, 9, id_tab, 0, 4);
+                int timestamp = ByteBuffer.wrap(id_tab).getInt();
+
+                System.arraycopy(this.m_content, 13, id_tab, 0, 4);
+                int port = ByteBuffer.wrap(id_tab).getInt();
+
+                data = timestamp + " - " + port;
+                break;
+            case 2:
+            case 3:
+                System.arraycopy(this.m_content, 9, id_tab, 0, 4);
+                int port_listen = ByteBuffer.wrap(id_tab).getInt();
+                data = String.valueOf(port_listen);
+                break;
+            case 5: // Les peers existants
+                int nb_id_peers = (this.m_content.length - 9) / 4;
+                for (int i = 0; i < nb_id_peers; i++) {
+                    System.arraycopy(this.m_content, 9 + i * 4, id_tab, 0, 4);
+                    data += ByteBuffer.wrap(id_tab).getInt() + " - ";
+                }
+                break;
+            case 4: // Les messages non délivrés existants
+                if (this.m_content.length > 9) {
+                    byte[] only_data = new byte[this.m_content.length - 9];
+                    System.arraycopy(this.m_content, 9, only_data, 0, only_data.length);
+                    int indice = 0;
+                    while (only_data.length > indice) {
+                        byte length = only_data[indice];
+                        byte[] current_data = new byte[length];
+                        System.arraycopy(only_data, indice + 1, current_data, 0, length);
+                        for (int i = 0; i < current_data.length; i++) {
+                            byte b = current_data[i];
+                            data += String.valueOf(b) + " ";
+                        }
+                        data += " - ";
+                        indice += length + 1;
+                    }
+                }
+                break;
+
+        }
+        return data;
+    }
+
+    public List<Message> getExistingMessages() throws UnknownHostException {
+        List<Message> rst = new ArrayList<>();
+        if (this.m_type == 4 && this.m_content.length > 9) {
+            byte[] only_data = new byte[this.m_content.length - 9];
+            System.arraycopy(this.m_content, 9, only_data, 0, only_data.length);
+            int indice = 0;
+            while (only_data.length > indice) {
+                byte length = only_data[indice];
+                byte[] current_data = new byte[length - 1];
+                System.arraycopy(only_data, indice + 2, current_data, 0, length - 1);
+                InetSocketAddress isa2 = new InetSocketAddress(InetAddress.getByName("localhost"), this.getM_id());
+                Message msg = new Message(isa2, current_data);
+                msg.m_num_ack = only_data[indice + 1];
+                msg.increaseNumAck(0);
+                rst.add(msg);
+                indice += length + 1;
+            }
+            return rst;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * @return the m_id
+     */
+    public int getM_id() {
+        return m_id;
+    }
+
+    /**
+     * @return the m_id_acks
+     */
+    public List<Integer> getM_id_acks() {
+        return m_id_acks;
+    }
+
+    /**
+     * @param m_timestamp the m_timestamp to set
+     */
+    public void setM_timestamp(int m_timestamp) {
+        this.m_timestamp = m_timestamp;
+    }
+
+    /**
+     * @return the m_num_ack
+     */
+    public int getM_num_ack() {
+        return m_num_ack;
+    }
+
+    /**
+     * @param m_type the m_type to set
+     */
+    public void setM_type(byte m_type) {
+        this.m_type = m_type;
     }
 
 }

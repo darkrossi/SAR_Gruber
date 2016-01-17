@@ -31,16 +31,20 @@ public class NioEngine extends Engine {
 
     boolean thread_launched = false;
     InetAddress m_localhost = InetAddress.getByName("localhost");
-    
+
     boolean m_has_accept = false;
+
+    BroadcastThread broadcast_thread;
+    int paquet_size;
 
     /**
      * Constructor
      *
      * @throws IOException
      */
-    NioEngine() throws IOException {
+    NioEngine(int paquet_size) throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
+        this.paquet_size = paquet_size;
         super.startEcho();
     }
 
@@ -65,10 +69,9 @@ public class NioEngine extends Engine {
      */
     @Override
     public void mainloop() {
-        BroadcastThread broadcast_thread = null;
         try {
             long delay = 0;
-            while(m_running){
+            while (m_running) {
                 getM_selector().select(delay);
                 Iterator<?> selectedKeys = this.getM_selector().selectedKeys().iterator();
                 if (selectedKeys.hasNext()) {
@@ -79,7 +82,7 @@ public class NioEngine extends Engine {
                     } else if (key.isAcceptable()) {
                         acceptCount++;
                         m_has_accept = true;
-                        
+
                         /**
                          * Si on accepte une connexion alors on crée un
                          * SocketChannel associé, on l'enregistre dans le
@@ -100,17 +103,6 @@ public class NioEngine extends Engine {
                         InetSocketAddress isa = (InetSocketAddress) channel.getRemoteAddress();
                         NioChannel nio_channel = new NioChannel(channel, peer, sk, isa, peer);
                         peer.accepted(null, nio_channel);
-
-                        /**
-                         * Si c'est la première connexion avec quelqu'un d'autre
-                         * alors on lance le thread qui va envoyer des messages
-                         * périodiquement
-                         */
-                        if (!thread_launched) {
-                            broadcast_thread = new BroadcastThread(peer, this);
-                            broadcast_thread.start();
-                            thread_launched = true;
-                        }
 
                     } else if (key.isReadable()) {
                         /**
@@ -159,25 +151,15 @@ public class NioEngine extends Engine {
                         try {
                             ch.finishConnect();
 
+                            // On set le statut de la SelectionKey
+                            key.interestOps(SelectionKey.OP_READ);
+
                             // On appelle le Peer qui prend le relais
                             Peer peer = (Peer) key.attachment();
                             InetSocketAddress isa = (InetSocketAddress) ch.getRemoteAddress();
                             NioChannel nio_channel = new NioChannel(ch, peer, key, isa, peer);
                             peer.connected(nio_channel);
 
-                            // On set le statut de la SelectionKey
-                            key.interestOps(SelectionKey.OP_READ);
-
-                            /**
-                             * Si c'est la première connexion avec quelqu'un
-                             * d'autre alors on lance le thread qui va envoyer
-                             * des messages périodiquement
-                             */
-                            if (!thread_launched) {
-                                broadcast_thread = new BroadcastThread(peer, this);
-                                broadcast_thread.start();
-                                thread_launched = true;
-                            }
                         } catch (ConnectException ex) {
                             /**
                              * Si jamais il y a un problème de connexion alors

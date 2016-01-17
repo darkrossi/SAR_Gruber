@@ -5,10 +5,8 @@
  */
 package messages.engine;
 
-import com.sun.xml.internal.ws.api.ha.HaInfo;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -28,15 +26,23 @@ public class Main {
          * On demande le port de connexion à l'utilisateur du programme
          */
         Scanner sc = new Scanner(System.in);
+        System.out.println("Port d'écoute local : ");
         int m_port_listening = sc.nextInt();
+
+        // Le tout premier peer entrera un port distant = à son port local.
+        System.out.println("Port d'écoute de l'hôte distant : ");
+        int m_remote_port = sc.nextInt();
+        
+        System.out.println("Taille des paquets : ");
+        int m_paquet_size = sc.nextInt();
 
         FileThread file_thread = new FileThread(m_port_listening);
         file_thread.start();
 
-        NioEngine engine = new NioEngine();
+        NioEngine engine = new NioEngine(m_paquet_size);
         Peer peer = new Peer(engine, file_thread);
 
-        MainThread main_thread = new MainThread(engine, m_port_listening, peer);
+        MainThread main_thread = new MainThread(engine, m_port_listening, m_remote_port, peer);
         main_thread.start();
 
         /**
@@ -106,13 +112,14 @@ public class Main {
     static class MainThread extends Thread {
 
         NioEngine engine;
-        int port_listening;
+        int port_listening, remote_port;
         Peer peer;
 
-        public MainThread(NioEngine engine, int port_listening, Peer peer) {
+        public MainThread(NioEngine engine, int port_listening, int remote_port, Peer peer) {
             this.engine = engine;
             this.port_listening = port_listening;
             this.peer = peer;
+            this.remote_port = remote_port;
         }
 
         @Override
@@ -129,8 +136,8 @@ public class Main {
                  * On se connecte avec les autres peers présents
                  */
                 InetAddress m_localhost = InetAddress.getByName("localhost");
-                for (int i = 0; i < port_listening - MIN_PORT; i++) {
-                    engine.connect(m_localhost, 2005 + i, peer);
+                if (port_listening != remote_port) {
+                    engine.connect(m_localhost, remote_port, peer);
                 }
 
                 engine.mainloop();

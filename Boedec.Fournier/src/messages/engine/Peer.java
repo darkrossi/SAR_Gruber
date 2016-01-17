@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 /**
@@ -24,13 +25,14 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     /**
      * Les messages reçus mais non délivrés
      */
-    private TreeSet<Message> m_messages;
+    SortedSet<Message> m_messages;
     private LinkedList<byte[]> m_message_to_send;
 
     NioEngine m_engine;
-    private int m_timestamp;
+    int m_timestamp;
 
     FileThread m_file_thread;
+    Channel m_new_peer_channel;
 
     /**
      * Constructeur
@@ -39,7 +41,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     public Peer(NioEngine engine, FileThread file_thread) {
         this.m_channels = new HashMap<>();
-        this.m_messages = new TreeSet<>();
+        this.m_messages = new TreeSet<>(new MessageComparator());
         this.m_timestamp = 0;
         this.m_message_to_send = new LinkedList<>();
         this.m_engine = engine;
@@ -73,6 +75,16 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     @Override
     public void accepted(Server server, Channel channel) {
         this.getM_channels().put(channel.getRemoteAddress(), channel);
+        if (m_engine.thread_launched) {
+            m_engine.broadcast_thread.m_interrupted = false;
+        }
+
+        // Incrémenter le nombre de acks pour tous les messages non délivrés
+        for (Message msg : m_messages) {
+            msg.increaseNumAck(0);
+        }
+
+        m_new_peer_channel = channel;
     }
 
     @Override
@@ -88,6 +100,37 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     @Override
     public void connected(Channel channel) {
         this.getM_channels().put(channel.getRemoteAddress(), channel);
+
+        /**
+         * Si on vient de se connecter (on veut rentrer dans le groupe)
+         */
+        if (this.getM_channels().size() == 1) {
+            /**
+             * Il faut envoyer un message hello
+             */
+            /**
+             * Ajout de la data
+             */
+            int length = 4;
+            byte bytes[] = new byte[length];
+            ByteBuffer b = ByteBuffer.allocate(4);
+            b.putInt(this.m_engine.m_port_listening);
+            bytes = b.array();
+
+            /**
+             * On ajoute en tête du message le type de message 0 = DATA, 1 =
+             * ACK, 2 = HELLO1, 3 = HELLO2
+             */
+            byte finalBytes[] = new byte[bytes.length + 1];
+            finalBytes[0] = 2;
+            System.arraycopy(bytes, 0, finalBytes, 1, bytes.length);
+
+            byte finalBytes2[] = headerMessage(finalBytes, this.m_timestamp, this.m_engine.m_port_listening);
+
+            channel.send(finalBytes2, 0, finalBytes2.length);
+        } else if (m_engine.thread_launched) {
+            m_engine.broadcast_thread.m_interrupted = false;
+        }
 
     }
 
@@ -109,7 +152,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         int port = 0;
         int indice_port = 4;
         if (type_message == 1) {
-            indice_port = 17;
+            indice_port = 13;
         }
         byte[] id_tab = new byte[4];
         System.arraycopy(bytes, indice_port, id_tab, 0, 4);
@@ -125,22 +168,29 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         /**
          * On set le timestamp
          */
-        byte time_stamp_message = bytes[0];
+        int time_stamp_message = message.getM_timestamp();
         if (time_stamp_message > this.m_timestamp) {
             this.m_timestamp = time_stamp_message;
         }
         this.m_timestamp++;  // on a reçu un ACK ou un message de data
 
+//        if (message.getM_id() != this.m_engine.m_port_listening) {
+//            System.out.print("RECEIVED : \t");
+//            System.out.print("\t" + message);
+//            System.out.println();
+//            System.out.flush();
+//        }
+
         /**
          * Si c'est de la data
          */
-        if (type_message == 0) {
+        if (type_message != 1) {
             this.m_messages.add(message);
         } else {
             synchronized (this.m_messages) {
-                if (this.m_messages.contains(message)) {
-                    Message final_message = this.getMessage(message);
-                    final_message.increaseNumAck();
+                Message final_message = this.getMessage(message);
+                if (final_message != null) {
+                    final_message.increaseNumAck(message.getM_id());
                 }
             }
         }
@@ -156,18 +206,116 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             /**
              * Peut-on délivrer msg_to_monitor ?
              */
-            if (msg_to_monitor.isReadyToDeliver(this.getNbPeers())) {
+            if (msg_to_monitor.isReadyToDeliver(this.getNbPeers(), m_engine.m_port_listening)) {
                 byte[] byte_to_deliver = msg_to_monitor.getM_content();
                 System.out.print("DELIVERED : \t");
-                for (int i = 0; i < byte_to_deliver.length; i++) {
-                    System.out.print("\t" + byte_to_deliver[i]);
-                }
+                System.out.print("\t" + msg_to_monitor);
                 System.out.println();
                 System.out.flush();
 
                 m_file_thread.addDeliveredMessage(byte_to_deliver);
 
                 m_messages.remove(msg_to_monitor);
+
+                /**
+                 * Si c'est un type 3 alors il faut bloquer le système
+                 */
+                if (msg_to_monitor.getType() == 3) {
+                    if (m_engine.thread_launched) {
+//                        System.out.println("Thread de broadcast interrompu");
+
+                        m_engine.broadcast_thread.m_interrupted = true;
+                    }
+                }
+
+                if (msg_to_monitor.getType() == 3 && this.m_engine.m_port_listening == msg_to_monitor.getM_id()) {
+                    // On bloque le système pour tout le monde
+                    // Le port 2005 doit envoyer les peers et les messages non délivrés au petit nouveau
+
+                    // Incrémenter le nombre de acks pour tous les messages non délivrés
+                    for (Message msg : this.m_messages) {
+                        msg.increaseNumAck(0);
+                    }
+
+                    //
+                    // 1. On envoie les messages non délivrés par le groupe
+                    //
+                    int length = 0;
+                    for (Message message_var : this.m_messages) {
+                        byte[] content = message_var.getM_content();
+                        length += content.length + 2;
+                    }
+
+                    /**
+                     * On écrit d'abord la taille du message puis le nombre de
+                     * ack puis le message
+                     */
+                    bytes = new byte[length];
+                    int indice2 = 0;
+                    for (Message message_var : this.m_messages) {
+                        byte[] content = message_var.getM_content();
+                        bytes[indice2] = (byte) (content.length + 1);
+                        bytes[indice2 + 1] = (byte) message_var.getM_num_ack();
+                        System.arraycopy(content, 0, bytes, indice2 + 2, content.length);
+                        indice2 += content.length + 2;
+                    }
+
+                    /**
+                     * On ajoute en tête du message le type de message 0 = DATA,
+                     * 1 = ACK, 2 = HELLO1, 3 = HELLO2, 5 = EXISTING_PEERS, 4 =
+                     * EXISTING_MESSAGES
+                     */
+                    byte[] finalBytes = new byte[bytes.length + 1];
+                    finalBytes[0] = 4;
+                    /**
+                     * Si il y a de la data
+                     */
+                    if (finalBytes.length != 1) {
+                        System.arraycopy(bytes, 0, finalBytes, 1, bytes.length);
+                    }
+                    byte[] finalBytes2 = headerMessage(finalBytes, this.m_timestamp, this.m_engine.m_port_listening);
+
+//                    Message message_debug = new Message(null, finalBytes2);
+                    this.m_new_peer_channel.send(finalBytes2, 0, finalBytes2.length);
+
+                    // 2. On envoie les peers
+                    /**
+                     * On crée la data
+                     */
+                    length = 4 * this.m_channels.size();
+                    bytes = new byte[length];
+                    List<Integer> list_listening_ports = msg_to_monitor.getM_id_acks();
+                    indice2 = 0;
+                    for (Integer listening_port : list_listening_ports) {
+                        if (listening_port != m_engine.m_port_listening) {
+                            ByteBuffer b = ByteBuffer.allocate(4);
+                            b.putInt(listening_port);
+                            System.arraycopy(b.array(), 0, bytes, indice2, 4);
+                            indice2 += 4;
+                        }
+                    }
+
+                    /**
+                     * On ajoute en tête du message le type de message 0 = DATA,
+                     * 1 = ACK, 2 = HELLO1, 3 = HELLO2, 4 = EXISTING_PEERS
+                     */
+                    finalBytes = new byte[bytes.length + 1];
+                    finalBytes[0] = 5;
+                    System.arraycopy(bytes, 0, finalBytes, 1, bytes.length);
+
+                    finalBytes2 = headerMessage(finalBytes, this.m_timestamp, this.m_engine.m_port_listening);
+
+                    this.m_new_peer_channel.send(finalBytes2, 0, finalBytes2.length);
+
+                    if (!this.m_engine.thread_launched) {
+                        m_engine.broadcast_thread = new BroadcastThread(this, this.m_engine, this.m_engine.paquet_size);
+                        m_engine.broadcast_thread.start();
+                        this.m_engine.thread_launched = true;
+                    } else {
+                        m_engine.broadcast_thread.m_interrupted = false;
+                    }
+
+                }
                 indice++;
 
             } else {
@@ -185,7 +333,8 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      * @param isa
      * @return
      */
-    boolean read(InetSocketAddress isa) {
+    boolean read(InetSocketAddress isa
+    ) {
         Channel channel = this.getM_channels().get(isa);
         if (channel == null) {
             return false;
@@ -204,27 +353,13 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         if (!this.m_message_to_send.isEmpty()) {
             byte[] msg_to_send = this.m_message_to_send.removeFirst();
 
-            /**
-             * On rajoute 8 cases pour le timestamp et l'id
-             */
-            byte finalBytes[] = new byte[msg_to_send.length + 8];
+            byte finalBytes[] = headerMessage(msg_to_send, this.m_timestamp, this.m_engine.m_port_listening);
 
-            /**
-             * Ajout du timestamp
-             */
-            ByteBuffer b = ByteBuffer.allocate(4);
-            b.putInt(this.m_timestamp);
-            byte[] result = b.array();
-            System.arraycopy(result, 0, finalBytes, 0, result.length);
-
-            /**
-             * Ajout de l'id
-             */
-            b = ByteBuffer.allocate(4);
-            b.putInt(this.m_engine.m_port_listening);
-            result = b.array();
-            System.arraycopy(result, 0, finalBytes, 4, result.length);
-            System.arraycopy(msg_to_send, 0, finalBytes, 8, msg_to_send.length);
+            Message msg = new Message(null, finalBytes);
+//            System.out.print("SENT : \t\t");
+//            System.out.print("\t" + msg);
+//            System.out.println();
+//            System.out.flush();
 
             /**
              * On a créé un message [timestamp | id | type | data]
@@ -233,7 +368,22 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
             for (Channel channel : channels) {
                 channel.send(finalBytes, 0, finalBytes.length);
             }
-            m_timestamp++;
+
+            /**
+             * Puis on envoie un ACK si nécessaire
+             */
+            byte type_message_sent = msg_to_send[0];
+            if (type_message_sent == 0 || type_message_sent == 3) {
+                byte bytes2[] = new byte[9];
+                bytes2[0] = 1;
+                System.arraycopy(finalBytes, 0, bytes2, 1, 4); // On copie le timestamp
+                System.arraycopy(finalBytes, 4, bytes2, 5, 4); // On copie le port à la fin
+
+                this.addMessageToSend(bytes2);
+                this.send();
+            }
+
+            this.m_timestamp++;
         }
     }
 
@@ -264,9 +414,12 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
         Message result = null;
         synchronized (this.m_messages) {
             ArrayList<Message> listeMessages = new ArrayList<>(this.m_messages);
-            int index = listeMessages.indexOf(msg);
-            result = listeMessages.get(index);
-
+            for (Message message : listeMessages) {
+                if (message.getM_id() == msg.m_remote_adress.getPort() && message.getM_timestamp() == msg.getM_timestamp()) {
+                    result = message;
+                    break;
+                }
+            }
         }
         return result;
     }
@@ -278,6 +431,32 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
      */
     void imDead(NioChannel aThis) {
         m_channels.remove(aThis.getRemoteAddress());
+    }
+
+    public static byte[] headerMessage(byte[] bytes, int timestamp, int id) {
+        /**
+         * On rajoute 8 cases pour le timestamp et l'id
+         */
+        byte finalBytes2[] = new byte[bytes.length + 8];
+
+        /**
+         * Ajout du timestamp
+         */
+        ByteBuffer b = ByteBuffer.allocate(4);
+        b.putInt(timestamp);
+        byte[] result = b.array();
+        System.arraycopy(result, 0, finalBytes2, 0, result.length);
+
+        /**
+         * Ajout de l'id
+         */
+        b = ByteBuffer.allocate(4);
+        b.putInt(id);
+        result = b.array();
+        System.arraycopy(result, 0, finalBytes2, 4, result.length);
+        System.arraycopy(bytes, 0, finalBytes2, 8, bytes.length);
+
+        return finalBytes2;
     }
 
 }

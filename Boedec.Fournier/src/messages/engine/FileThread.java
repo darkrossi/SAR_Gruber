@@ -50,11 +50,10 @@ public class FileThread extends Thread {
                 if (!this.m_delivered_messages.isEmpty()) {
 //                    System.out.print("On tente d'écrire dans le fichier : ");
                     byte[] data = m_delivered_messages.removeFirst();
-                    
-                    for (byte d : data) {
-//                        System.out.print(d + " ");
-                        this.pw.print(d + " ");
-                    }
+                    Message message = new Message(null, data);
+
+                    this.pw.print(message);
+
                     this.pw.println();
                 }
             }
