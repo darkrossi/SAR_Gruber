@@ -19,8 +19,6 @@ import java.util.logging.Logger;
 
 public class Main {
 
-    static final int MIN_PORT = 2005; // Représente le premier port à renseigner pour les tests
-
     public static void main(String args[]) throws Exception {
         /**
          * On demande le port de connexion à l'utilisateur du programme
@@ -29,24 +27,40 @@ public class Main {
         System.out.println("Port d'écoute local : ");
         int m_port_listening = sc.nextInt();
 
-        // Le tout premier peer entrera un port distant = à son port local.
+        /**
+         * Le tout premier peer entrera un port distant = à son port local.
+         */
         System.out.println("Port d'écoute de l'hôte distant : ");
         int m_remote_port = sc.nextInt();
-        
+
+        /**
+         * On demande la taille des paquets qui seront envoyés
+         */
         System.out.println("Taille des paquets : ");
         int m_paquet_size = sc.nextInt();
 
+        /**
+         * On lance le thread qui écrira les messages délivrés dans un fichier.
+         * Ce fichier servira à la vérification autonome du total ordonnancement
+         * des messages délivrés.
+         */
         FileThread file_thread = new FileThread(m_port_listening);
         file_thread.start();
 
+        /**
+         * Création de l'Engine et du Peer
+         */
         NioEngine engine = new NioEngine(m_paquet_size);
         Peer peer = new Peer(engine, file_thread);
 
+        /**
+         * On lance le thread qui fera tourner l'Engine
+         */
         MainThread main_thread = new MainThread(engine, m_port_listening, m_remote_port, peer);
         main_thread.start();
 
         /**
-         * Il faut appuyer sur la touche entrée pour que le programme s'arrête>
+         * Il faut appuyer sur la touche entrée pour que le programme s'arrête.
          */
         while (true) {
             sc.nextLine();
@@ -56,48 +70,67 @@ public class Main {
         }
         sc.close();
 
-        file_thread.destroy();
+        /**
+         * On dit à tout le monde de s'arrêter.
+         */
         engine.m_running = false;
         engine.pw.close();
 
         /**
-         * Seul le dernier connecté est censé pouvoir faire ça
+         * On demande au file_thread de continuer l'écriture jusqu'à ce qu'il
+         * n'y ait plus de messages délivrés à écrire dans le fichier.
          */
-        if (!engine.m_has_accept) {
-            compareDeliveredMessagesFiles(m_port_listening);
-        }
-
-        System.exit(0);
+        file_thread.end(engine.m_has_accept, m_port_listening, m_remote_port);
 
     }
 
-    static void compareDeliveredMessagesFiles(int listening_port) throws IOException {
+    /**
+     * Va comparer les fichiers qui ont été générés et qui contiennent les
+     * messages délivrés pour chaque Peer. La comparaison ce fait ligne par
+     * ligne.
+     *
+     * @param listening_port
+     * @param remote_port
+     * @throws IOException
+     */
+    static void compareDeliveredMessagesFiles(int listening_port, int remote_port) throws IOException {
         /**
          * On va chercher tous les fichiers créés
          */
         HashMap<Integer, BufferedReader> files = new HashMap<>();
-        for (int i = 2005; i < listening_port + 1; i++) {
+        HashMap<Integer, Boolean> has_started = new HashMap<>();
+        for (int i = remote_port; i < listening_port + 1; i++) {
             File file_temp = new File(String.valueOf(i) + ".txt");
             BufferedReader br = new BufferedReader(new FileReader(file_temp));
             files.put(i, br);
+            has_started.put(i, false);
         }
 
         String message = "Le total ordonnancement a été respecté ! WELL DONE !";
         boolean has_finished = false;
         while (!has_finished) {
             String line = null, line_temp;
-            boolean has_juste_entered = true;
+            int timestamp = 0, timestamp_temp;
+            boolean has_just_entered = true;
             for (Map.Entry<Integer, BufferedReader> entry : files.entrySet()) {
                 Integer port = entry.getKey();
                 BufferedReader buffered_reader = entry.getValue();
                 if ((line_temp = buffered_reader.readLine()) != null) {
-                    // process the line.
-                    if (has_juste_entered) {
+                    if (has_just_entered) {
                         line = line_temp;
-                        has_juste_entered = false;
+                        timestamp = Integer.parseInt(line_temp.split(" - ")[0]);
+                        has_just_entered = false;
                     }
-                    if (!line.equals(line_temp)) {
+
+                    timestamp_temp = Integer.parseInt(line_temp.split(" - ")[0]);
+
+                    /**
+                     * On compare ligne par ligne.
+                     */
+                    if (!line.equals(line_temp) && timestamp_temp < timestamp) {
                         message = "Le total ordonancement n'a pas été respecté ! TOO BAD !";
+                        has_finished = true;
+                        break;
                     }
                 } else {
                     has_finished = true;
@@ -133,7 +166,7 @@ public class Main {
                 engine.listen(port_listening, peer);
 
                 /**
-                 * On se connecte avec les autres peers présents
+                 * On se connecte avec le peer de port d'écoute remote_port.
                  */
                 InetAddress m_localhost = InetAddress.getByName("localhost");
                 if (port_listening != remote_port) {
@@ -142,8 +175,6 @@ public class Main {
 
                 engine.mainloop();
             } catch (UnknownHostException ex) {
-                Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (SecurityException ex) {
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
             } catch (IOException ex) {
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);

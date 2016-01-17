@@ -75,13 +75,12 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
     @Override
     public void accepted(Server server, Channel channel) {
         this.getM_channels().put(channel.getRemoteAddress(), channel);
-        if (m_engine.thread_launched) {
-            m_engine.broadcast_thread.m_interrupted = false;
-        }
-
         // Incrémenter le nombre de acks pour tous les messages non délivrés
         for (Message msg : m_messages) {
             msg.increaseNumAck(0);
+        }
+        if (m_engine.thread_launched) {
+            m_engine.broadcast_thread.m_interrupted = false;
         }
 
         m_new_peer_channel = channel;
@@ -129,6 +128,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 
             channel.send(finalBytes2, 0, finalBytes2.length);
         } else if (m_engine.thread_launched) {
+            this.m_engine.connectCount++;
             m_engine.broadcast_thread.m_interrupted = false;
         }
 
@@ -180,7 +180,6 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
 //            System.out.println();
 //            System.out.flush();
 //        }
-
         /**
          * Si c'est de la data
          */
@@ -208,10 +207,10 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
              */
             if (msg_to_monitor.isReadyToDeliver(this.getNbPeers(), m_engine.m_port_listening)) {
                 byte[] byte_to_deliver = msg_to_monitor.getM_content();
-                System.out.print("DELIVERED : \t");
-                System.out.print("\t" + msg_to_monitor);
-                System.out.println();
-                System.out.flush();
+//                System.out.print("DELIVERED : \t");
+//                System.out.print("\t" + msg_to_monitor);
+//                System.out.println();
+//                System.out.flush();
 
                 m_file_thread.addDeliveredMessage(byte_to_deliver);
 
@@ -243,7 +242,7 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
                     int length = 0;
                     for (Message message_var : this.m_messages) {
                         byte[] content = message_var.getM_content();
-                        length += content.length + 2;
+                        length += content.length + 4 + 1;
                     }
 
                     /**
@@ -254,10 +253,18 @@ public class Peer implements AcceptCallback, ConnectCallback, DeliverCallback {
                     int indice2 = 0;
                     for (Message message_var : this.m_messages) {
                         byte[] content = message_var.getM_content();
-                        bytes[indice2] = (byte) (content.length + 1);
-                        bytes[indice2 + 1] = (byte) message_var.getM_num_ack();
-                        System.arraycopy(content, 0, bytes, indice2 + 2, content.length);
-                        indice2 += content.length + 2;
+
+                        ByteBuffer b = ByteBuffer.allocate(4);
+                        b.putInt(content.length + 1);
+                        byte[] result = b.array();
+                        System.arraycopy(result, 0, bytes, indice2, 4);
+                        indice2 += 4;
+
+                        bytes[indice2] = (byte) message_var.getM_num_ack();
+                        indice2++;
+
+                        System.arraycopy(content, 0, bytes, indice2, content.length);
+                        indice2 += content.length;
                     }
 
                     /**

@@ -11,6 +11,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.LinkedList;
+import static messages.engine.Main.compareDeliveredMessagesFiles;
 
 /**
  *
@@ -23,6 +24,9 @@ public class FileThread extends Thread {
 
     File f;
     PrintWriter pw;
+
+    boolean has_to_finish = false;
+    boolean has_finished = false;
 
     public FileThread(int m_listening_port) {
         this.m_listening_port = m_listening_port;
@@ -48,22 +52,39 @@ public class FileThread extends Thread {
         while (true) {
             synchronized (this.m_delivered_messages) {
                 if (!this.m_delivered_messages.isEmpty()) {
-//                    System.out.print("On tente d'écrire dans le fichier : ");
                     byte[] data = m_delivered_messages.removeFirst();
                     Message message = new Message(null, data);
 
                     this.pw.print(message);
 
                     this.pw.println();
+                } else if (has_to_finish) {
+                    has_finished = true;
+                    break;
                 }
             }
         }
     }
 
-    @Override
-    public void destroy() {
-//        super.destroy();
+    public void end(boolean has_accept, int port_listening, int remote_port) throws IOException {
+        System.out.println("Vérification automatique en cours ...");
+
+        this.has_to_finish = true;
+
+        /**
+         * On attend qu'il n'y ait plus de messages à écrire dans le fichier.
+         */
+        while (!has_finished);
         this.pw.close();
+
+        /**
+         * Seul le dernier connecté est censé pouvoir faire ça
+         */
+        if (!has_accept) {
+            compareDeliveredMessagesFiles(port_listening, remote_port);
+        }
+
+        System.exit(0);
     }
 
 }

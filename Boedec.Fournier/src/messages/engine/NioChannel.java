@@ -11,7 +11,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -97,17 +96,11 @@ public class NioChannel extends Channel {
         }
 
         /**
-         * Si c'est de la data qui a été envoyé alors on envoie aussi un ack de
-         * taille 13 [ type (1) | timestamp_ack (4) | IP (4) | port (4)]
+         * Les messages de type 2, 4 et 5 ne sont pas des messages envoyés en
+         * Broadcast.
          */
         if (type_message_sent == 0 || type_message_sent == 3 || type_message_sent == 1) {
             m_deliver.deliver(this, bytes);
-        } else {
-//            Message message = new Message(null, bytes);
-//            System.out.print("SENT : \t\t");
-//            System.out.print("\t" + message);
-//            System.out.println();
-//            System.out.flush();
         }
 
         m_state_write = CONNECTED;
@@ -177,16 +170,15 @@ public class NioChannel extends Channel {
                     }
 
                     Message message;
-                    /**
-                     * Si c'est de la data qui a été envoyé alors on envoie
-                     * aussi un ack de taille 13 [ type (1) | timestamp_ack (4)
-                     * | IP (4) | port (4)]
-                     */
+
                     switch (type_message_received) {
                         case 0:
                         case 3:
-//                        System.out.println("ACK REMOTE_MESSAGE");
-
+                            /**
+                             * Si c'est de la data qui a été envoyé alors on
+                             * envoie aussi un ack de taille 13 [ type (1) |
+                             * timestamp_ack (4) | IP (4) | port (4)]
+                             */
                             byte bytes2[] = new byte[9];
                             bytes2[0] = 1;
                             System.arraycopy(bytes, 0, bytes2, 1, 4); // On copie le timestamp
@@ -203,14 +195,6 @@ public class NioChannel extends Channel {
                              */
                             message = new Message(null, bytes);
 
-//                            System.out.print("RECEIVED : \t");
-//                            System.out.print("\t" + message);
-//                            System.out.println();
-//                            System.out.flush();
-
-                            /**
-                             * Il faut envoyer un message hello2
-                             */
                             /**
                              * Ajout de l'id
                              */
@@ -221,8 +205,8 @@ public class NioChannel extends Channel {
                             bytes = b.array();
 
                             /**
-                             * On ajoute en tête du message le type de message 0
-                             * = DATA, 1 = ACK, 2 = HELLO1, 3 = HELLO2
+                             * On ajoute en tête du message le type de message 3
+                             * = HELLO2
                              */
                             byte finalBytes[] = new byte[bytes.length + 1];
                             finalBytes[0] = 3;
@@ -232,15 +216,13 @@ public class NioChannel extends Channel {
                             m_peer.send();
                             break;
                         case 4:
+                            /**
+                             * On a reçu la liste des messages non délivrés du
+                             * groupe.
+                             */
                             message = new Message(null, bytes);
 
-//                            System.out.print("RECEIVED : \t");
-//                            System.out.print("\t" + message);
-//                            System.out.println();
-//                            System.out.flush();
-
                             List<Message> list_messages = message.getExistingMessages();
-//                            list_messages = new ArrayList<>(); // ligne debug
                             if (list_messages != null && !list_messages.isEmpty()) {
                                 for (Message message_var : list_messages) {
                                     m_peer.m_messages.add(message_var);
@@ -249,12 +231,10 @@ public class NioChannel extends Channel {
 
                             break;
                         case 5:
+                            /**
+                             * On a reçu la liste des peers du groupe.
+                             */
                             message = new Message(null, bytes);
-
-//                            System.out.print("RECEIVED : \t");
-//                            System.out.print("\t" + message);
-//                            System.out.println();
-//                            System.out.flush();
 
                             String id_peers = message.getData();
                             String[] tab_id_peers = id_peers.split(" - ");
@@ -265,16 +245,22 @@ public class NioChannel extends Channel {
                             }
 
                             /**
-                             * -1 car on ne prend pas le dernier
+                             * On se connecte à tous les peers du groupe.
                              */
                             for (int i = 0; i < tab_id_peers.length; i++) {
                                 int id_peer = Integer.parseInt(tab_id_peers[i]);
                                 if (id_peer != m_peer.m_engine.m_port_listening) {
                                     InetAddress m_localhost = InetAddress.getByName("localhost");
-//                                    System.out.println("On tente de se connecter");
                                     m_peer.m_engine.connect(m_localhost, id_peer, m_peer);
                                 }
                             }
+
+                            /**
+                             * Maintenant qu'on n'a les messages non délivrés du
+                             * groupe et qu'on est connecté avec les autres on
+                             * peut alors envoyer des messages comme un membre à
+                             * part entière du groupe.
+                             */
                             m_peer.m_engine.broadcast_thread = new BroadcastThread(this.m_peer, this.m_peer.m_engine, this.m_peer.m_engine.paquet_size);
                             m_peer.m_engine.broadcast_thread.start();
                             this.m_peer.m_engine.thread_launched = true;

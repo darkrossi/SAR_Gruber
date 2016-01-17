@@ -38,17 +38,16 @@ public class BroadcastThread extends Thread {
 
             if (!m_interrupted) {
                 /*
-                 * On crée un tableau de data propre au Peer, qui sera broadcasté au groupe.
+                 * On crée un tableau de data qui sera broadcasté au groupe.
                  */
                 int length = this.m_paquet_size;
                 byte bytes[] = new byte[length];
                 for (int i = 0; i < length; i++) {
-                    bytes[i] = (byte) (i%256);
+                    bytes[i] = (byte) (i % 256);
                 }
 
                 /**
-                 * On ajoute en tête du message le type de message 0 = DATA, 1 =
-                 * ACK
+                 * On ajoute en tête du message le type de message 0 = DATA
                  */
                 byte finalBytes[] = new byte[bytes.length + 1];
                 finalBytes[0] = 0;
@@ -65,9 +64,9 @@ public class BroadcastThread extends Thread {
 
                 m_engine.getM_selector().wakeup();
 
-                int random_delay = randInt(1, 1000);
+                int random_delay = randInt(50, 100);
                 try {
-                    this.sleep(random_delay); // 2 secondes d'attente. Facilite les tests, mais devra être retiré lors du test en burst mode.
+                    this.sleep(random_delay);
                 } catch (InterruptedException ex) {
                     interrupt();
                 }

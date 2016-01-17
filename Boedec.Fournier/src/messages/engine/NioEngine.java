@@ -5,7 +5,11 @@
  */
 package messages.engine;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -45,7 +49,7 @@ public class NioEngine extends Engine {
     NioEngine(int paquet_size) throws IOException {
         m_selector = SelectorProvider.provider().openSelector();
         this.paquet_size = paquet_size;
-        super.startEcho();
+
     }
 
     /**
@@ -189,6 +193,22 @@ public class NioEngine extends Engine {
     public Server listen(int port, AcceptCallback callback) throws IOException {
 
         m_port_listening = port;
+
+        /**
+         * On crée le fichier de Stat associé.
+         */
+        File f = new File(String.valueOf("Stats" + port + ".txt"));
+        try {
+            this.pw = new PrintWriter(new BufferedWriter(new FileWriter(f)));
+        } catch (IOException exception) {
+            System.out.println("Erreur lors de la lecture : " + exception.getMessage());
+        }
+        startTime = System.currentTimeMillis();
+
+        /**
+         * On peut lancer le thread d'écoute des stats.
+         */
+        super.startEcho();
 
         /**
          * On crée une socket d'écoute
