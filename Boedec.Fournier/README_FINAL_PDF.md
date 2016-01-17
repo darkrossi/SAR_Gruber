@@ -81,7 +81,7 @@ Ce sont également les messages eux-même qui comptent le nombre de acks reçus 
 - Renseigner la taille des messages souhaitée (64, 256, 512 ou 1024 bytes).
 
 **Pour vérifier l'ordre des messages delivered :**  
-Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent dans l'ordre chronologique ... Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
+Notre implémentation connaît la limite suivante : la vérification automatique ne peut se faire que si les ports utilisés se suivent (port1 = port0 + 1, port2 = port1 + 1, etc) ... Ceci car nous écrivons dans des fichiers.txt pour la vérification et que cela facilite grandement le processus.  
 Une fois qu'au moins deux peers sont connectés ils commençent à s'envoyer des messages. Pour arrêter l'envoi de messages et vérifier l'ordre, il faut appuyer sur la touche 'ENTREE' dans la console de chaque peer. Le vérificateur écrira dans la console si l'ordre a bien été respecté.
 
 **Pour observer les statistiques :**  
