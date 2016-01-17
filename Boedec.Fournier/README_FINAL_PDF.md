@@ -9,6 +9,7 @@ date: 17 Janvier 2016
 - Les peers envoient aussi rapidement que possible (pas de temps d'attente).
 - Les messages sont bien délivrés dans le même ordre, un vérificateur le confirme.
 - Dynamisme du groupe + limitations --TODO--
+- Un début de tolérance aux fautes (détection d'un peer qui part)
 
 # Design du totally ordered multicast
 ## Types de messages
