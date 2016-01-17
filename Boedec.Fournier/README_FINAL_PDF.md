@@ -33,6 +33,23 @@ Contexte :
 Chaque Peer tient à jour une file d'attente dans laquelle il stocke les messages qu'il a reçu (et envoyé). Cette file d'attente prend la forme d'un SortedSet < Message >. En effet les messages sont classés selon leur timestamp.  
 Ce sont également les messages eux-même qui comptent le nombre de acks reçus qui leur correspondent.
 
+## The overall class design of your implementation
+- Main.java : Point d'entrée du programme. Instancie un Peer et son NioEngine. Instancie également un FileThread qui sera utile pour la vérification de l'ordre. En fin d'execution, lance la vérification de l'ordre des messages delivered.
+
+- BroadcastThread.java : Lancé par chaque Peer une fois qu'ils sont connectés au groupe. Les Peer envoient alors des messages le plus rapidement possible vers l'ensemble des autres peers.
+
+- FileThread.java : Écrit les messages delivered dans un fichier .txt. Ce fichier servira au vérificateur de l'ordre des messages delivered.
+
+- Message.java : Élement de la file d'attente des messages à deliver. Un Message contient les bytes reçus par le peer (le message), le type de ce message, son timestamp et le nombre de ack's reçus pour ce message.
+
+- MonitorMessagesToSend.java : Vérifie en continu si il y a des messages à envoyer.
+
+- NioChannel.java : Dérive de Channel, permet de réaliser des opérations d'écriture/lecture sur un Channel.
+
+- NioEngine.java : Surveille l'ensemble des channels et signale lorsqu'une opération de ACCEPT/CONNECT/WRITE/READ est possible.
+
+- Peer.java : Représente un participant à la "discussion". Il implémente AcceptCallBack.java, ConnectCallBack.java et DeliverCallBack.java. Un Peer tient à jour une HashMap contenant les connexions actives avec d'autres Peers. Un Peer possède également une file d'attente de messages à deliver et une file d'attente de messages à envoyer. Chaque Peer gère sa propre logical clock.
+
 ## Comment lancer le projet et tester
 Pour créer un peer :
 - Lancer la classe Main.java.
@@ -64,7 +81,6 @@ Nous n'affichons pas le délai de deliver d'un message. Il faudrait que l'emette
 
 <The design of your fault-tolerant totally-ordered multicast>
 <Where are the main entry points (classes, methods) in the code>
-<The overall class design of your implementation>
 <Other main points that are important in order to understand your code>
 <stats : bandwidth et delai ??>
 <Message.java l.43 format ???>
