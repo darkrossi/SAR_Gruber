@@ -176,8 +176,10 @@ public class Main {
                 engine.mainloop();
             } catch (UnknownHostException ex) {
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(-1);
             } catch (IOException ex) {
                 Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(-1);
             }
         }
 

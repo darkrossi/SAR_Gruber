@@ -202,6 +202,7 @@ public class NioEngine extends Engine {
             this.pw = new PrintWriter(new BufferedWriter(new FileWriter(f)));
         } catch (IOException exception) {
             System.out.println("Erreur lors de la lecture : " + exception.getMessage());
+            System.exit(-1);
         }
         startTime = System.currentTimeMillis();
 

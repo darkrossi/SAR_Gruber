@@ -33,6 +33,7 @@ public class BroadcastThread extends Thread {
     @Override
     public void run() {
         super.run();
+        System.out.println("Broadcast en cours. Appuyez sur ENTREE pour arreter et lancer la verification.");
 
         while (m_running) {
 
