@@ -41,8 +41,8 @@ public class Message implements Comparable<Message> {
         this.m_content = bytes;
         /**
          * bytes de la forme [timestamp (4) | id (4) | type (1) | data (?)] si
-         * data et [timestamp (4) | id (4) | type (1) | timestamp_ack (4) | IP
-         * (4) | port (4)] si ACK
+         * data et [timestamp (4) | id (4) | type (1) | timestamp_ack (4) |
+         * port (4)] si ACK
          */
         this.m_type = bytes[8];
         int indice_timestamp = 0;
