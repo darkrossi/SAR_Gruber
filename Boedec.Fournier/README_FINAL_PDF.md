@@ -5,7 +5,7 @@
 - Marche avec n peers.
 - Les peers envoient aussi rapidement que possible (pas de temps d'attente).
 - Les messages sont bien délivrés dans le même ordre, un vérificateur le confirme.
-
+- Dynamisme du groupe + limitations --TODO--
 
 ## Design du totally ordered multicast
 ### Types de messages
@@ -24,6 +24,8 @@ Contexte :
 - Type 3 : HELLO2  
 Format :  
 Contexte :
+
+- TODO
 
 ### Fonctionnement du vérificateur
 
